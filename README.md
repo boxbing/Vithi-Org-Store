@@ -5,7 +5,7 @@ This project is a storefront with a Python backend that can persist users and or
 ## Run the app
 
 ```bash
-cd /home/sonu/Projects/vithi-organics-homepage
+cd /home/sonu/Projects/Vithi-Org-Store
 python3 -m venv .venv
 ./.venv/bin/pip install -r requirements.txt
 ./.venv/bin/python server.py

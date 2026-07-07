@@ -365,6 +365,10 @@ def render_orders(user):
 
 
 class VithiHandler(SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        # Ensure static assets resolve from the project directory regardless of launch cwd.
+        super().__init__(*args, directory=DATA_DIR, **kwargs)
+
     def do_GET(self):
         user = get_user_from_cookie(self.headers.get('Cookie'))
         parsed = urlparse(self.path)
