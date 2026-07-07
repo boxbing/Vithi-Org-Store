@@ -13,8 +13,9 @@
       <h1 style="margin:0 0 0.6rem;">$product_name</h1>
       <div style="display:flex;align-items:center;gap:1rem;">
         <strong style="font-size:1.35rem;color:var(--green-900);">₹$product_price</strong>
-        <div style="color:var(--gold);">⭐ 4.9</div>
+        <div style="color:var(--gold);">⭐ $average_rating ($review_count)</div>
       </div>
+      <p style="margin:0.5rem 0 0;color:var(--green-700);font-weight:600;">Weight: $product_weight</p>
       <p style="color:var(--muted);margin-top:0.8rem;">Pure, ethically sourced organic essentials crafted for everyday wellness.</p>
 
       <div style="margin-top:1rem;display:flex;gap:0.6rem;">
@@ -24,9 +25,16 @@
         </form>
         <form method="post" action="/wishlist/add" style="display:inline;">
           <input type="hidden" name="productId" value="$product_id" />
-          <button class="btn btn-secondary" type="submit">Add to Wishlist</button>
+          <button class="btn product-wishlist-btn wishlist-icon-btn" type="submit" aria-label="Add to wishlist" title="Add to wishlist">&#9829;</button>
         </form>
       </div>
+
+      <section class="product-review-section" style="margin-top:1.2rem;">
+        <h3>Ratings & Comments</h3>
+        $review_message_block
+        $review_form_block
+        <div class="product-review-list">$product_review_rows</div>
+      </section>
     </aside>
   </div>
 </main>

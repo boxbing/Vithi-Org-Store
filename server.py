@@ -3,6 +3,9 @@ import random
 import string
 import json
 import html
+import hmac
+import hashlib
+from datetime import datetime
 from http import cookies
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from string import Template
@@ -15,16 +18,31 @@ except ImportError:  # pragma: no cover - depends on environment
 
 DATA_DIR = os.path.dirname(__file__)
 TEMPLATE_DIR = os.path.join(DATA_DIR, 'templates')
+ADMIN_DIR = os.path.join(DATA_DIR, 'admin')
+ADMIN_TEMPLATE_DIR = os.path.join(ADMIN_DIR, 'templates')
+ADMIN_DATA_DIR = os.path.join(ADMIN_DIR, 'data')
 DATA_STORE = os.path.join(DATA_DIR, 'data')
 USERS_FILE = os.path.join(DATA_STORE, 'users.json')
 ORDERS_FILE = os.path.join(DATA_STORE, 'orders.json')
+REVIEWS_FILE = os.path.join(DATA_STORE, 'reviews.json')
+LEGACY_SUBSCRIBERS_FILE = os.path.join(DATA_STORE, 'subscribers.json')
+SUBSCRIBERS_FILE = os.path.join(ADMIN_DATA_DIR, 'subscribers.json')
+ADMIN_AUTH_FILE = os.path.join(ADMIN_DATA_DIR, 'auth.json')
 DATABASE_URL = os.environ.get('DATABASE_URL') or os.environ.get('POSTGRES_URL') or 'postgresql://postgres:postgres@localhost:5432/vithi'
+ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
+ADMIN_PASSWORD_HASH = os.environ.get('ADMIN_PASSWORD_HASH', '').strip()
 
 sessions = {}
+admin_sessions = {}
+admin_login_csrf = {}
 carts = {}
 wishlist = {}
 users = {}
 orders = []
+reviews = []
+subscribers = []
+admin_auth = {'username': ADMIN_USERNAME, 'password_hash': ''}
 db_connection = None
 db_ready = False
 
@@ -32,8 +50,48 @@ db_ready = False
 def ensure_data_dir():
     try:
         os.makedirs(DATA_STORE, exist_ok=True)
+        os.makedirs(ADMIN_DATA_DIR, exist_ok=True)
+        os.makedirs(ADMIN_TEMPLATE_DIR, exist_ok=True)
     except Exception:
         pass
+
+
+def make_password_hash(password, salt=None, iterations=260000):
+    if salt is None:
+        salt = os.urandom(16).hex()
+    digest = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), iterations).hex()
+    return f'pbkdf2_sha256${iterations}${salt}${digest}'
+
+
+def verify_password_hash(password, encoded):
+    try:
+        algorithm, iteration_text, salt, expected = encoded.split('$', 3)
+        if algorithm != 'pbkdf2_sha256':
+            return False
+        iterations = int(iteration_text)
+    except ValueError:
+        return False
+    actual = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), iterations).hex()
+    return hmac.compare_digest(actual, expected)
+
+
+def initialize_admin_auth():
+    global admin_auth
+    ensure_data_dir()
+
+    if ADMIN_PASSWORD_HASH:
+        admin_auth = {'username': ADMIN_USERNAME, 'password_hash': ADMIN_PASSWORD_HASH}
+        return
+
+    existing = load_json_file(ADMIN_AUTH_FILE, {})
+    username = str(existing.get('username', ADMIN_USERNAME)).strip() or ADMIN_USERNAME
+    stored_hash = str(existing.get('password_hash', '')).strip()
+
+    if not stored_hash:
+        stored_hash = make_password_hash(ADMIN_PASSWORD)
+        save_json_file(ADMIN_AUTH_FILE, {'username': username, 'password_hash': stored_hash})
+
+    admin_auth = {'username': username, 'password_hash': stored_hash}
 
 
 def load_json_file(path, default):
@@ -69,15 +127,24 @@ def connect_to_postgres():
 
 
 def initialize_persistence():
-    global users, orders, db_ready
+    global users, orders, reviews, subscribers, db_ready
     ensure_data_dir()
     legacy_users = load_json_file(USERS_FILE, {})
     legacy_orders = load_json_file(ORDERS_FILE, [])
+    legacy_reviews = load_json_file(REVIEWS_FILE, [])
+    legacy_subscribers = load_json_file(LEGACY_SUBSCRIBERS_FILE, [])
+    current_subscribers = load_json_file(SUBSCRIBERS_FILE, [])
+    if isinstance(current_subscribers, list) and current_subscribers:
+        legacy_subscribers = current_subscribers
 
     connection = connect_to_postgres()
     if connection is None:
         users = legacy_users
         orders = legacy_orders
+        reviews = legacy_reviews
+        subscribers = legacy_subscribers
+        save_json_file(REVIEWS_FILE, reviews)
+        save_json_file(SUBSCRIBERS_FILE, subscribers)
         db_ready = False
         return False
 
@@ -101,6 +168,25 @@ def initialize_persistence():
                 created_at TIMESTAMP DEFAULT NOW()
             )
         ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id BIGSERIAL PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS product_reviews (
+                id BIGSERIAL PRIMARY KEY,
+                product_id BIGINT NOT NULL,
+                user_email TEXT NOT NULL,
+                user_name TEXT NOT NULL,
+                rating INTEGER NOT NULL,
+                comment TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE (product_id, user_email)
+            )
+        ''')
         cursor.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT')
         cursor.execute('ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_email TEXT')
 
@@ -115,6 +201,24 @@ def initialize_persistence():
         for order in legacy_orders:
             save_order_to_db(order)
         orders = load_orders_from_db()
+
+    reviews = load_reviews_from_db()
+    if not reviews and legacy_reviews:
+        for review in legacy_reviews:
+            if isinstance(review, dict):
+                save_review_to_db(review)
+        reviews = load_reviews_from_db()
+
+    subscribers = load_subscriptions_from_db()
+    if not subscribers and legacy_subscribers:
+        for entry in legacy_subscribers:
+            if isinstance(entry, dict):
+                email = entry.get('email', '').strip().lower()
+            else:
+                email = str(entry).strip().lower()
+            if email:
+                save_subscription_to_db(email)
+        subscribers = load_subscriptions_from_db()
 
     return True
 
@@ -191,6 +295,62 @@ def save_order_to_db(order_record):
     return True
 
 
+def load_reviews_from_db():
+    connection = connect_to_postgres()
+    if connection is None:
+        return []
+    with connection.cursor() as cursor:
+        cursor.execute(
+            'SELECT product_id, user_email, user_name, rating, comment, created_at FROM product_reviews ORDER BY created_at DESC, id DESC'
+        )
+        rows = cursor.fetchall()
+    return [
+        {
+            'productId': int(row[0]),
+            'userEmail': row[1],
+            'userName': row[2],
+            'rating': int(row[3]),
+            'comment': row[4],
+            'createdAt': row[5]
+        }
+        for row in rows
+    ]
+
+
+def save_review_to_db(review_record):
+    connection = connect_to_postgres()
+    if connection is None:
+        return False
+    with connection.cursor() as cursor:
+        cursor.execute(
+            '''
+            INSERT INTO product_reviews (product_id, user_email, user_name, rating, comment, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (product_id, user_email) DO UPDATE SET
+                user_name = EXCLUDED.user_name,
+                rating = EXCLUDED.rating,
+                comment = EXCLUDED.comment,
+                created_at = EXCLUDED.created_at
+            ''',
+            (
+                review_record['productId'],
+                review_record['userEmail'],
+                review_record['userName'],
+                review_record['rating'],
+                review_record['comment'],
+                review_record.get('createdAt')
+            )
+        )
+    return True
+
+
+def has_user_reviewed(product_id, user_email):
+    for review in reviews:
+        if str(review.get('productId')) == str(product_id) and review.get('userEmail', '').lower() == user_email.lower():
+            return True
+    return False
+
+
 def update_user_address_in_db(email, address):
     connection = connect_to_postgres()
     if connection is None:
@@ -200,13 +360,62 @@ def update_user_address_in_db(email, address):
     return True
 
 
+def load_subscriptions_from_db():
+    connection = connect_to_postgres()
+    if connection is None:
+        return []
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT email, created_at FROM subscriptions ORDER BY created_at DESC')
+        rows = cursor.fetchall()
+    return [{'email': row[0], 'createdAt': row[1]} for row in rows]
+
+
+def save_subscription_to_db(email):
+    connection = connect_to_postgres()
+    if connection is None:
+        return False
+    with connection.cursor() as cursor:
+        cursor.execute(
+            '''
+            INSERT INTO subscriptions (email)
+            VALUES (%s)
+            ON CONFLICT (email) DO UPDATE SET
+                created_at = NOW()
+            ''',
+            (email,)
+        )
+    return True
+
+
+def save_subscription_local(email):
+    normalized = email.strip().lower()
+    if not normalized:
+        return False
+    for entry in subscribers:
+        if entry.get('email', '').lower() == normalized:
+            return True
+    subscribers.append({'email': normalized, 'createdAt': datetime.now().isoformat(timespec='seconds')})
+    save_json_file(SUBSCRIBERS_FILE, subscribers)
+    return True
+
+
+def is_valid_email(value):
+    value = value.strip()
+    if '@' not in value:
+        return False
+    local, _, domain = value.partition('@')
+    return bool(local and domain and '.' in domain)
+
+
 initialize_persistence()
+initialize_admin_auth()
 
 products = [
     {
         'id': 1,
         'name': 'Organic Turmeric Powder',
         'price': 249,
+        'weightKg': 1.0,
         'description': 'Pure, earthy spice with antioxidant-rich wellness benefits.',
         'image': 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=900&q=80'
     },
@@ -214,6 +423,7 @@ products = [
         'id': 2,
         'name': 'Botanical Face Serum',
         'price': 599,
+        'weightKg': 1.0,
         'description': 'Lightweight nourishment for calm, glowing, healthy skin.',
         'image': 'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=900&q=80'
     },
@@ -221,6 +431,7 @@ products = [
         'id': 3,
         'name': 'Wildflower Organic Honey',
         'price': 399,
+        'weightKg': 1.0,
         'description': 'Pure sweetness with floral richness and natural goodness.',
         'image': 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=900&q=80'
     }
@@ -229,6 +440,12 @@ products = [
 
 def load_template(name):
     path = os.path.join(TEMPLATE_DIR, name)
+    with open(path, 'r', encoding='utf-8') as handle:
+        return handle.read()
+
+
+def load_admin_template(name):
+    path = os.path.join(ADMIN_TEMPLATE_DIR, name)
     with open(path, 'r', encoding='utf-8') as handle:
         return handle.read()
 
@@ -250,6 +467,26 @@ def get_user_from_cookie(cookie_header):
         return None
     user_email = sessions.get(session_id.value)
     return users.get(user_email)
+
+
+def get_admin_from_cookie(cookie_header):
+    if not cookie_header:
+        return None
+    cookie = cookies.SimpleCookie()
+    cookie.load(cookie_header)
+    session_id = cookie.get('vithi_admin_session')
+    if not session_id:
+        return None
+    return admin_sessions.get(session_id.value)
+
+
+def get_cookie_value(cookie_header, key):
+    if not cookie_header:
+        return ''
+    cookie = cookies.SimpleCookie()
+    cookie.load(cookie_header)
+    entry = cookie.get(key)
+    return entry.value if entry else ''
 
 
 def generate_session_id():
@@ -278,15 +515,6 @@ def get_template_user_context(user):
     }
 
 
-def get_cookie_value(cookie_header, name):
-    if not cookie_header:
-        return None
-    cookie = cookies.SimpleCookie()
-    cookie.load(cookie_header)
-    value = cookie.get(name)
-    return value.value if value else None
-
-
 def get_cart_items(cookie_header):
     cart_session_id = get_cookie_value(cookie_header, 'vithi_cart_session')
     if not cart_session_id:
@@ -304,31 +532,99 @@ def get_wishlist_items(cookie_header):
 def render_index(user):
     cards = []
     for product in products:
+        weight_label = f'{float(product.get("weightKg", 1.0)):.2f} kg'
         cards.append(
             f'<article class="card product-card">'
             f'<a class="product-link" href="/products/{product["id"]}"><img src="{product["image"]}" alt="{product["name"]}" /></a>'
             f'<div class="card-body">'
             f'<h3><a href="/products/{product["id"]}">{product["name"]}</a></h3>'
             f'<p>{product["description"]}</p>'
+            f'<span class="card-meta">Weight: {weight_label}</span>'
             f'<div class="price-row"><strong>₹{product["price"]}</strong><div class="actions">'
             f'<form method="post" action="/cart/add" style="display:inline;">'
             f'<input type="hidden" name="productId" value="{product["id"]}" />'
             f'<button class="btn btn-primary" type="submit">Add to Cart</button>'
+            f'</form>'
+            f'<form method="post" action="/wishlist/add" style="display:inline;">'
+            f'<input type="hidden" name="productId" value="{product["id"]}" />'
+            f'<button class="btn product-wishlist-btn wishlist-icon-btn" type="submit" aria-label="Add to wishlist" title="Add to wishlist">&#9829;</button>'
             f'</form></div></div>'
             f'</div></article>'
         )
     return make_template('index.html', title='Vithi Organics', product_cards=''.join(cards), **get_template_user_context(user))
 
 
-def render_product(user, product):
+def render_product(user, product, review_message=''):
+    product_weight = f'{float(product.get("weightKg", 1.0)):.2f} kg'
+    product_reviews = [item for item in reviews if str(item.get('productId')) == str(product['id'])]
+    review_count = len(product_reviews)
+    avg_rating = 0
+    if review_count:
+        avg_rating = round(sum(int(item.get('rating', 0)) for item in product_reviews) / review_count, 1)
+
+    if product_reviews:
+        rows = []
+        for entry in product_reviews:
+            reviewer = html.escape(str(entry.get('userName', 'Customer')))
+            rating = int(entry.get('rating', 0))
+            comment = html.escape(str(entry.get('comment', '')))
+            created_at = html.escape(str(entry.get('createdAt', '')))
+            rows.append(
+                f'<article class="product-review-item">'
+                f'<div class="product-review-head"><strong>{reviewer}</strong><span>{"★" * rating}{"☆" * (5 - rating)}</span></div>'
+                f'<p>{comment}</p>'
+                f'<small>{created_at}</small>'
+                f'</article>'
+            )
+        review_rows = ''.join(rows)
+    else:
+        review_rows = '<p class="login-copy">No ratings yet. Be the first to review this product.</p>'
+
+    if not user:
+        review_form_block = '<p class="login-copy">Please <a class="text-link" href="/login">login</a> to add your rating and comment.</p>'
+    elif has_user_reviewed(product['id'], user['email']):
+        review_form_block = '<p class="status-message">You have already reviewed this product.</p>'
+    else:
+        review_form_block = (
+            '<form class="product-review-form" method="post" action="/reviews/add">'
+            f'<input type="hidden" name="productId" value="{product["id"]}" />'
+            '<label for="rating">Rating</label>'
+            '<select id="rating" name="rating" required>'
+            '<option value="">Choose</option>'
+            '<option value="5">5 - Excellent</option>'
+            '<option value="4">4 - Very Good</option>'
+            '<option value="3">3 - Good</option>'
+            '<option value="2">2 - Fair</option>'
+            '<option value="1">1 - Poor</option>'
+            '</select>'
+            '<label for="comment">Comment</label>'
+            '<textarea id="comment" name="comment" rows="4" maxlength="500" placeholder="Share your experience" required></textarea>'
+            '<button class="btn btn-primary" type="submit">Submit Review</button>'
+            '</form>'
+        )
+
+    message_block = ''
+    if review_message == 'success':
+        message_block = '<p class="status-message">Thanks. Your review was submitted successfully.</p>'
+    elif review_message == 'exists':
+        message_block = '<p class="error-message">You can only review this product once.</p>'
+    elif review_message == 'invalid':
+        message_block = '<p class="error-message">Please provide a valid rating and comment.</p>'
+
     return make_template(
         'product.html',
         title=product['name'],
         product_name=product['name'],
         product_description=product['description'],
         product_price=product['price'],
+        product_weight=product_weight,
         product_image=product['image'],
         product_id=product['id'],
+        average_rating='--' if not review_count else f'{avg_rating}',
+        review_count=review_count,
+        product_review_rows=review_rows,
+        review_form_block=review_form_block,
+        review_message_block=message_block,
         **get_template_user_context(user)
     )
 
@@ -337,6 +633,7 @@ def render_cart(user, cart_items):
     if not cart_items:
         cart_rows = '<p class="login-copy">Your cart is empty. Add a few organic essentials to get started.</p>'
         item_count = 0
+        total_weight = 0
         subtotal = 0
         shipping = 0
         tax = 0
@@ -344,12 +641,15 @@ def render_cart(user, cart_items):
     else:
         rows = []
         subtotal = 0
+        total_weight = 0
         for product_id, quantity in cart_items.items():
             product = next((item for item in products if str(item['id']) == str(product_id)), None)
             if not product:
                 continue
+            weight_kg = float(product.get('weightKg', 1.0))
             line_total = product['price'] * quantity
             subtotal += line_total
+            total_weight += weight_kg * quantity
             rows.append(
                 f'<div class="cart-item">'
                 f'<img src="{product["image"]}" alt="{product["name"]}" />'
@@ -359,7 +659,7 @@ def render_cart(user, cart_items):
             )
         cart_rows = ''.join(rows)
         item_count = sum(cart_items.values())
-        shipping = 0 if subtotal >= 1000 else 150
+        shipping = round(total_weight * 70)
         tax = round(subtotal * 0.08)
         total = subtotal + shipping + tax
 
@@ -368,6 +668,7 @@ def render_cart(user, cart_items):
         title='Cart',
         cart_rows=cart_rows,
         item_count=item_count,
+        total_weight=f'{total_weight:.2f}',
         subtotal=subtotal,
         shipping=shipping,
         tax=tax,
@@ -477,6 +778,68 @@ def render_user_home(user, message=''):
     )
 
 
+def render_admin_template(name, **context):
+    content = Template(load_admin_template(name)).substitute(**context)
+    is_authenticated = bool(context.get('is_authenticated', True))
+    sidebar_block = ''
+    topbar_block = ''
+    if is_authenticated:
+        sidebar_block = (
+            '<aside class="admin-sidebar">'
+            '<a class="admin-brand" href="/admin/subscribers">Vithi Admin</a>'
+            '<nav class="admin-nav">'
+            '<a href="/admin/subscribers">Subscribers</a>'
+            '<a href="/" target="_blank" rel="noopener noreferrer">Open Storefront</a>'
+            '</nav>'
+            '</aside>'
+        )
+        topbar_block = (
+            '<header class="admin-topbar">'
+            f'<p>Signed in as <strong>{html.escape(context.get("admin_user", "Admin"))}</strong></p>'
+            '<a class="admin-logout" href="/admin/logout">Logout</a>'
+            '</header>'
+        )
+    return Template(load_admin_template('base.html')).substitute(
+        title=context.get('title', 'Admin'),
+        admin_user=context.get('admin_user', 'Admin'),
+        shell_class='' if is_authenticated else 'admin-shell-login',
+        sidebar_block=sidebar_block,
+        topbar_block=topbar_block,
+        content=content
+    )
+
+
+def render_admin_login(csrf_token, error=''):
+    return render_admin_template(
+        'login.html',
+        title='Admin Login',
+        admin_user='Admin',
+        is_authenticated=False,
+        csrf_token=csrf_token,
+        error_block='' if not error else f'<p class="admin-error">{html.escape(error)}</p>'
+    )
+
+
+def render_admin_subscribers(admin_user):
+    if not subscribers:
+        rows = '<tr><td colspan="2">No subscribers yet.</td></tr>'
+    else:
+        items = []
+        for entry in subscribers:
+            email = html.escape(str(entry.get('email', '')))
+            created_at = html.escape(str(entry.get('createdAt', '')))
+            items.append(f'<tr><td>{email}</td><td>{created_at}</td></tr>')
+        rows = ''.join(items)
+
+    return render_admin_template(
+        'subscribers.html',
+        title='Subscribers Admin',
+        admin_user=admin_user,
+        subscriber_count=str(len(subscribers)),
+        subscriber_rows=rows
+    )
+
+
 class VithiHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         # Ensure static assets resolve from the project directory regardless of launch cwd.
@@ -484,6 +847,7 @@ class VithiHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         user = get_user_from_cookie(self.headers.get('Cookie'))
+        admin_user = get_admin_from_cookie(self.headers.get('Cookie'))
         parsed = urlparse(self.path)
         path = parsed.path
 
@@ -497,13 +861,36 @@ class VithiHandler(SimpleHTTPRequestHandler):
             except StopIteration:
                 self.send_error(404, 'Product not found')
                 return
-            self.respond_html(render_product(user, product))
+            params = parse_qs(parsed.query)
+            review_message = params.get('review', [''])[0]
+            self.respond_html(render_product(user, product, review_message=review_message))
             return
         if path == '/login':
+            if user:
+                self.redirect('/user/home')
+                return
             self.respond_html(render_login(user))
             return
         if path == '/register':
+            if user:
+                self.redirect('/user/home')
+                return
             self.respond_html(render_register(user))
+            return
+        if path == '/admin':
+            if admin_user:
+                self.redirect('/admin/subscribers')
+            else:
+                self.redirect('/admin/login')
+            return
+        if path == '/admin/login':
+            if admin_user:
+                self.redirect('/admin/subscribers')
+                return
+            self.respond_admin_login_with_csrf()
+            return
+        if path == '/admin/logout':
+            self.logout_admin()
             return
         if path == '/user/home':
             if not user:
@@ -514,6 +901,12 @@ class VithiHandler(SimpleHTTPRequestHandler):
             if params.get('updated', [''])[0] == '1':
                 message = 'Address updated successfully.'
             self.respond_html(render_user_home(user, message=message))
+            return
+        if path == '/admin/subscribers':
+            if not admin_user:
+                self.redirect('/admin/login')
+                return
+            self.respond_html(render_admin_subscribers(admin_user))
             return
         if path == '/cart':
             self.respond_html(render_cart(user, get_cart_items(self.headers.get('Cookie'))))
@@ -539,6 +932,31 @@ class VithiHandler(SimpleHTTPRequestHandler):
         body = self.rfile.read(length).decode('utf-8')
         data = parse_qs(body)
         user = get_user_from_cookie(self.headers.get('Cookie'))
+
+        if path == '/admin/login':
+            username = data.get('username', [''])[0].strip()
+            password = data.get('password', [''])[0]
+            form_token = data.get('csrf_token', [''])[0]
+            cookie_token = get_cookie_value(self.headers.get('Cookie'), 'vithi_admin_csrf')
+            if not form_token or not cookie_token or form_token != cookie_token or form_token not in admin_login_csrf:
+                self.respond_admin_login_with_csrf(error='Security check failed. Please try again.')
+                return
+            del admin_login_csrf[form_token]
+
+            if username == admin_auth['username'] and verify_password_hash(password, admin_auth['password_hash']):
+                session_id = generate_session_id()
+                admin_sessions[session_id] = username
+                self.send_response(302)
+                self.send_header('Location', '/admin/subscribers')
+                c = cookies.SimpleCookie()
+                c['vithi_admin_session'] = session_id
+                c['vithi_admin_session']['path'] = '/'
+                c['vithi_admin_session']['httponly'] = True
+                self.send_header('Set-Cookie', c.output(header=''))
+                self.end_headers()
+                return
+            self.respond_admin_login_with_csrf(error='Invalid admin credentials.')
+            return
 
         if path == '/cart/add':
             cookie_header = self.headers.get('Cookie')
@@ -691,6 +1109,63 @@ class VithiHandler(SimpleHTTPRequestHandler):
             self.end_headers()
             return
 
+        if path == '/reviews/add':
+            product_id = data.get('productId', [''])[0].strip()
+            rating_text = data.get('rating', [''])[0].strip()
+            comment = data.get('comment', [''])[0].strip()
+
+            product = next((item for item in products if str(item['id']) == product_id), None)
+            if not product:
+                self.send_error(404, 'Product not found')
+                return
+            if not user:
+                self.redirect('/login')
+                return
+
+            try:
+                rating = int(rating_text)
+            except ValueError:
+                rating = 0
+
+            if rating < 1 or rating > 5 or not comment:
+                self.redirect(f'/products/{product_id}?review=invalid')
+                return
+            if has_user_reviewed(product_id, user['email']):
+                self.redirect(f'/products/{product_id}?review=exists')
+                return
+
+            review_record = {
+                'productId': int(product_id),
+                'userEmail': user['email'],
+                'userName': user.get('name', 'Customer'),
+                'rating': rating,
+                'comment': comment[:500],
+                'createdAt': self.date_time_string()
+            }
+            reviews.append(review_record)
+            if db_ready:
+                save_review_to_db(review_record)
+                reviews[:] = load_reviews_from_db()
+            else:
+                save_json_file(REVIEWS_FILE, reviews)
+
+            self.redirect(f'/products/{product_id}?review=success')
+            return
+
+        if path == '/subscribe':
+            email = data.get('email', [''])[0].strip().lower()
+            if not is_valid_email(email):
+                self.redirect('/')
+                return
+            if db_ready:
+                saved = save_subscription_to_db(email)
+                if saved:
+                    subscribers[:] = load_subscriptions_from_db()
+            else:
+                save_subscription_local(email)
+            self.redirect('/')
+            return
+
         self.send_error(404, 'Not found')
 
     def logout(self):
@@ -710,16 +1185,50 @@ class VithiHandler(SimpleHTTPRequestHandler):
         self.send_header('Set-Cookie', c.output(header=''))
         self.end_headers()
 
+    def logout_admin(self):
+        cookie_header = self.headers.get('Cookie')
+        if cookie_header:
+            cookie = cookies.SimpleCookie()
+            cookie.load(cookie_header)
+            session_id = cookie.get('vithi_admin_session')
+            if session_id and session_id.value in admin_sessions:
+                del admin_sessions[session_id.value]
+        self.send_response(302)
+        self.send_header('Location', '/admin/login')
+        c = cookies.SimpleCookie()
+        c['vithi_admin_session'] = ''
+        c['vithi_admin_session']['path'] = '/'
+        c['vithi_admin_session']['expires'] = 'Thu, 01 Jan 1970 00:00:00 GMT'
+        self.send_header('Set-Cookie', c.output(header=''))
+        c2 = cookies.SimpleCookie()
+        c2['vithi_admin_csrf'] = ''
+        c2['vithi_admin_csrf']['path'] = '/admin'
+        c2['vithi_admin_csrf']['expires'] = 'Thu, 01 Jan 1970 00:00:00 GMT'
+        self.send_header('Set-Cookie', c2.output(header=''))
+        self.end_headers()
+
+    def respond_admin_login_with_csrf(self, error=''):
+        csrf_token = generate_session_id()
+        admin_login_csrf[csrf_token] = datetime.now().isoformat(timespec='seconds')
+        c = cookies.SimpleCookie()
+        c['vithi_admin_csrf'] = csrf_token
+        c['vithi_admin_csrf']['path'] = '/admin'
+        c['vithi_admin_csrf']['httponly'] = True
+        self.respond_html(render_admin_login(csrf_token=csrf_token, error=error), extra_headers=[('Set-Cookie', c.output(header=''))])
+
     def redirect(self, location):
         self.send_response(302)
         self.send_header('Location', location)
         self.end_headers()
 
-    def respond_html(self, content):
+    def respond_html(self, content, extra_headers=None):
         encoded = content.encode('utf-8')
         self.send_response(200)
         self.send_header('Content-Type', 'text/html; charset=utf-8')
         self.send_header('Content-Length', str(len(encoded)))
+        if extra_headers:
+            for header, value in extra_headers:
+                self.send_header(header, value)
         self.end_headers()
         self.wfile.write(encoded)
 

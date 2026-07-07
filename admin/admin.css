@@ -1,0 +1,245 @@
+/* Admin section (Sneat-inspired) */
+.admin-body {
+  margin: 0;
+  font-family: "Public Sans", "Inter", sans-serif;
+  background: #f5f5f9;
+  color: #566a7f;
+}
+
+.admin-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+}
+
+.admin-shell-login {
+  grid-template-columns: 1fr;
+}
+
+.admin-sidebar {
+  background: #fff;
+  border-right: 1px solid #eceef1;
+  padding: 1.2rem 1rem;
+}
+
+.admin-brand {
+  display: inline-block;
+  font-weight: 700;
+  color: #696cff;
+  font-size: 1.2rem;
+  margin-bottom: 1.2rem;
+}
+
+.admin-nav {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.admin-nav a {
+  display: block;
+  padding: 0.62rem 0.8rem;
+  border-radius: 0.5rem;
+  color: #697a8d;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.admin-nav a:hover {
+  background: #f5f5ff;
+  color: #696cff;
+}
+
+.admin-main {
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.admin-topbar {
+  height: 70px;
+  background: #fff;
+  border-bottom: 1px solid #eceef1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.4rem;
+}
+
+.admin-topbar p {
+  margin: 0;
+  color: #566a7f;
+}
+
+.admin-topbar strong {
+  color: #384551;
+}
+
+.admin-logout {
+  color: #696cff;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.admin-content {
+  padding: 1.3rem;
+}
+
+.admin-card {
+  background: #fff;
+  border-radius: 0.7rem;
+  box-shadow: 0 0.25rem 1rem rgba(161, 172, 184, 0.12);
+  padding: 1.2rem;
+}
+
+.admin-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.admin-kicker {
+  margin: 0 0 0.35rem;
+  color: #a1acb8;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.admin-card h1 {
+  margin: 0;
+  color: #384551;
+  font-size: 1.35rem;
+}
+
+.admin-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  background: #e7e7ff;
+  color: #696cff;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-table th,
+.admin-table td {
+  text-align: left;
+  padding: 0.78rem 0.62rem;
+  border-bottom: 1px solid #eceef1;
+}
+
+.admin-table th {
+  color: #697a8d;
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.admin-table td {
+  color: #566a7f;
+  font-size: 0.94rem;
+}
+
+.admin-login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  position: relative;
+  padding: 1.5rem;
+}
+
+.admin-login-logo {
+  position: absolute;
+  top: 1.1rem;
+  right: 1.2rem;
+  color: #384551;
+  font-size: 1rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.admin-login-card {
+  width: min(420px, 100%);
+  background: #fff;
+  border-radius: 0.8rem;
+  box-shadow: 0 0.35rem 1.2rem rgba(161, 172, 184, 0.2);
+  padding: 1.5rem;
+}
+
+.admin-login-eyebrow {
+  margin: 0;
+  color: #a1acb8;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.admin-login-card h1 {
+  margin: 0.4rem 0;
+  color: #384551;
+  font-size: 1.5rem;
+}
+
+.admin-login-copy {
+  margin: 0;
+  color: #697a8d;
+}
+
+.admin-error {
+  margin-top: 0.8rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(255, 62, 29, 0.28);
+  background: rgba(255, 62, 29, 0.08);
+  color: #ff3e1d;
+}
+
+.admin-login-form {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.admin-login-form label {
+  color: #566a7f;
+  font-weight: 600;
+}
+
+.admin-login-form input {
+  width: 100%;
+  border: 1px solid #d9dee3;
+  border-radius: 0.55rem;
+  padding: 0.7rem 0.8rem;
+}
+
+.admin-login-form button {
+  margin-top: 0.35rem;
+  border: 0;
+  border-radius: 0.55rem;
+  padding: 0.78rem 0.8rem;
+  background: #696cff;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .admin-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid #eceef1;
+  }
+}

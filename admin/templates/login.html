@@ -1,0 +1,17 @@
+<div class="admin-login-page">
+  <a class="admin-login-logo" href="/" target="_blank" rel="noopener noreferrer">VithiOrg</a>
+  <div class="admin-login-card">
+    <p class="admin-login-eyebrow">Admin Panel</p>
+    <h1>Welcome Back</h1>
+    <p class="admin-login-copy">Use admin credentials to access the backend section.</p>
+    $error_block
+    <form method="post" action="/admin/login" class="admin-login-form">
+      <input type="hidden" name="csrf_token" value="$csrf_token" />
+      <label for="admin-username">Username</label>
+      <input id="admin-username" name="username" type="text" placeholder="Enter username" required />
+      <label for="admin-password">Password</label>
+      <input id="admin-password" name="password" type="password" placeholder="Enter password" required />
+      <button type="submit">Sign In</button>
+    </form>
+  </div>
+</div>
