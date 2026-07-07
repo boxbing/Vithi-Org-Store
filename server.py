@@ -2,6 +2,7 @@ import os
 import random
 import string
 import json
+import html
 from http import cookies
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from string import Template
@@ -86,6 +87,7 @@ def initialize_persistence():
                 email TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 phone TEXT,
+                address TEXT,
                 password TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT NOW()
             )
@@ -95,9 +97,12 @@ def initialize_persistence():
                 id BIGSERIAL PRIMARY KEY,
                 product_name TEXT NOT NULL,
                 total TEXT NOT NULL,
+                user_email TEXT,
                 created_at TIMESTAMP DEFAULT NOW()
             )
         ''')
+        cursor.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT')
+        cursor.execute('ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_email TEXT')
 
     users = load_users_from_db()
     if not users and legacy_users:
@@ -119,9 +124,18 @@ def load_users_from_db():
     if connection is None:
         return {}
     with connection.cursor() as cursor:
-        cursor.execute('SELECT name, email, phone, password FROM users ORDER BY created_at')
+        cursor.execute('SELECT name, email, phone, address, password FROM users ORDER BY created_at')
         rows = cursor.fetchall()
-    return {row[1]: {'name': row[0], 'email': row[1], 'phone': row[2], 'password': row[3]} for row in rows}
+    return {
+        row[1]: {
+            'name': row[0],
+            'email': row[1],
+            'phone': row[2],
+            'address': row[3] or '',
+            'password': row[4]
+        }
+        for row in rows
+    }
 
 
 def load_orders_from_db():
@@ -129,9 +143,9 @@ def load_orders_from_db():
     if connection is None:
         return []
     with connection.cursor() as cursor:
-        cursor.execute('SELECT product_name, total, created_at FROM orders ORDER BY id')
+        cursor.execute('SELECT product_name, total, user_email, created_at FROM orders ORDER BY id')
         rows = cursor.fetchall()
-    return [{'productName': row[0], 'total': row[1], 'createdAt': row[2]} for row in rows]
+    return [{'productName': row[0], 'total': row[1], 'userEmail': row[2] or '', 'createdAt': row[3]} for row in rows]
 
 
 def save_user_to_db(user_record):
@@ -141,14 +155,21 @@ def save_user_to_db(user_record):
     with connection.cursor() as cursor:
         cursor.execute(
             '''
-            INSERT INTO users (email, name, phone, password)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO users (email, name, phone, address, password)
+            VALUES (%s, %s, %s, %s, %s)
             ON CONFLICT (email) DO UPDATE SET
                 name = EXCLUDED.name,
                 phone = EXCLUDED.phone,
+                address = EXCLUDED.address,
                 password = EXCLUDED.password
             ''',
-            (user_record['email'], user_record['name'], user_record.get('phone', ''), user_record['password'])
+            (
+                user_record['email'],
+                user_record['name'],
+                user_record.get('phone', ''),
+                user_record.get('address', ''),
+                user_record['password']
+            )
         )
     return True
 
@@ -159,9 +180,23 @@ def save_order_to_db(order_record):
         return False
     with connection.cursor() as cursor:
         cursor.execute(
-            'INSERT INTO orders (product_name, total, created_at) VALUES (%s, %s, %s)',
-            (order_record['productName'], order_record['total'], order_record.get('createdAt'))
+            'INSERT INTO orders (product_name, total, user_email, created_at) VALUES (%s, %s, %s, %s)',
+            (
+                order_record['productName'],
+                order_record['total'],
+                order_record.get('userEmail', ''),
+                order_record.get('createdAt')
+            )
         )
+    return True
+
+
+def update_user_address_in_db(email, address):
+    connection = connect_to_postgres()
+    if connection is None:
+        return False
+    with connection.cursor() as cursor:
+        cursor.execute('UPDATE users SET address=%s WHERE email=%s', (address, email))
     return True
 
 
@@ -221,6 +256,28 @@ def generate_session_id():
     return ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(32))
 
 
+def generate_captcha_challenge():
+    left = random.randint(1, 9)
+    right = random.randint(1, 9)
+    return f'What is {left} + {right}?', str(left + right)
+
+
+def get_template_user_context(user):
+    if user:
+        return {
+            'user_name': user['name'].split()[0],
+            'login_label': 'My Home',
+            'login_href': '/user/home',
+            'auth_secondary': '<a href="/logout" class="icon-link">Logout</a>'
+        }
+    return {
+        'user_name': '',
+        'login_label': 'Login',
+        'login_href': '/login',
+        'auth_secondary': ''
+    }
+
+
 def get_cookie_value(cookie_header, name):
     if not cookie_header:
         return None
@@ -260,11 +317,20 @@ def render_index(user):
             f'</form></div></div>'
             f'</div></article>'
         )
-    return make_template('index.html', title='Vithi Organics', product_cards=''.join(cards), user_name=user['name'].split()[0] if user else '', login_label='Logout' if user else 'Login', login_href='/logout' if user else '/login')
+    return make_template('index.html', title='Vithi Organics', product_cards=''.join(cards), **get_template_user_context(user))
 
 
 def render_product(user, product):
-    return make_template('product.html', title=product['name'], product_name=product['name'], product_description=product['description'], product_price=product['price'], product_image=product['image'], product_id=product['id'], user_name=user['name'].split()[0] if user else '', login_label='Logout' if user else 'Login', login_href='/logout' if user else '/login')
+    return make_template(
+        'product.html',
+        title=product['name'],
+        product_name=product['name'],
+        product_description=product['description'],
+        product_price=product['price'],
+        product_image=product['image'],
+        product_id=product['id'],
+        **get_template_user_context(user)
+    )
 
 
 def render_cart(user, cart_items):
@@ -306,9 +372,7 @@ def render_cart(user, cart_items):
         shipping=shipping,
         tax=tax,
         total=total,
-        user_name=user['name'].split()[0] if user else '',
-        login_label='Logout' if user else 'Login',
-        login_href='/logout' if user else '/login'
+        **get_template_user_context(user)
     )
 
 
@@ -339,29 +403,78 @@ def render_wishlist(user, wishlist_items):
         title='Wishlist',
         wishlist_rows=wishlist_rows,
         item_count=item_count,
-        user_name=user['name'].split()[0] if user else '',
-        login_label='Logout' if user else 'Login',
-        login_href='/logout' if user else '/login'
+        **get_template_user_context(user)
     )
 
 
 def render_login(user, error=''):
-    return make_template('login.html', title='Login', error_block='' if not error else f'<p class="error-message">{error}</p>', user_name=user['name'].split()[0] if user else '', login_label='Logout' if user else 'Login', login_href='/logout' if user else '/login')
+    return make_template(
+        'login.html',
+        title='Login',
+        error_block='' if not error else f'<p class="error-message">{html.escape(error)}</p>',
+        **get_template_user_context(user)
+    )
 
 
-def render_register(user, error=''):
-    return make_template('register.html', title='Create Account', error_block='' if not error else f'<p class="error-message">{error}</p>', user_name=user['name'].split()[0] if user else '', login_label='Logout' if user else 'Login', login_href='/logout' if user else '/login')
+def render_register(user, error='', fullname='', email='', phone=''):
+    captcha_question, captcha_answer = generate_captcha_challenge()
+    return make_template(
+        'register.html',
+        title='Create Account',
+        error_block='' if not error else f'<p class="error-message">{html.escape(error)}</p>',
+        fullname=html.escape(fullname),
+        email=html.escape(email),
+        phone=html.escape(phone),
+        captcha_question=captcha_question,
+        captcha_expected=captcha_answer,
+        **get_template_user_context(user)
+    )
 
 
 def render_orders(user):
-    if not orders:
+    visible_orders = orders
+    if user:
+        visible_orders = [order for order in orders if order.get('userEmail') == user['email']]
+
+    if not visible_orders:
         order_rows = '<p class="login-copy">You have no orders yet.</p>'
     else:
         rows = []
-        for order in orders:
-            rows.append(f'<li style="margin-bottom:0.6rem;"><strong>{order["productName"]}</strong> — ₹{order["total"]} on {order["createdAt"]}</li>')
+        for order in visible_orders:
+            product_name = html.escape(str(order.get('productName', 'Item')))
+            total = html.escape(str(order.get('total', '0')))
+            created_at = html.escape(str(order.get('createdAt', '')))
+            rows.append(f'<li style="margin-bottom:0.6rem;"><strong>{product_name}</strong> — ₹{total} on {created_at}</li>')
         order_rows = f'<ul style="padding-left: 1rem; color: var(--muted);">{"".join(rows)}</ul>'
-    return make_template('orders.html', title='Orders', order_rows=order_rows, user_name=user['name'].split()[0] if user else '', login_label='Logout' if user else 'Login', login_href='/logout' if user else '/login')
+    return make_template('orders.html', title='Orders', order_rows=order_rows, **get_template_user_context(user))
+
+
+def render_user_home(user, message=''):
+    user_orders = [order for order in orders if order.get('userEmail') == user['email']]
+    if not user_orders:
+        order_rows = '<p class="login-copy">No previous orders yet. Your future purchases will appear here.</p>'
+    else:
+        items = []
+        for order in user_orders:
+            product_name = html.escape(str(order.get('productName', 'Item')))
+            total = html.escape(str(order.get('total', '0')))
+            created_at = html.escape(str(order.get('createdAt', '')))
+            items.append(
+                f'<li><strong>{product_name}</strong><span>₹{total}</span><small>{created_at}</small></li>'
+            )
+        order_rows = f'<ul class="order-history-list">{"".join(items)}</ul>'
+
+    return make_template(
+        'user_home.html',
+        title='My Home',
+        message_block='' if not message else f'<p class="status-message">{html.escape(message)}</p>',
+        user_name_full=html.escape(user.get('name', '')),
+        user_email=html.escape(user.get('email', '')),
+        user_phone=html.escape(user.get('phone', '')),
+        address_value=html.escape(user.get('address', '')),
+        order_rows=order_rows,
+        **get_template_user_context(user)
+    )
 
 
 class VithiHandler(SimpleHTTPRequestHandler):
@@ -391,6 +504,16 @@ class VithiHandler(SimpleHTTPRequestHandler):
             return
         if path == '/register':
             self.respond_html(render_register(user))
+            return
+        if path == '/user/home':
+            if not user:
+                self.redirect('/login')
+                return
+            params = parse_qs(parsed.query)
+            message = ''
+            if params.get('updated', [''])[0] == '1':
+                message = 'Address updated successfully.'
+            self.respond_html(render_user_home(user, message=message))
             return
         if path == '/cart':
             self.respond_html(render_cart(user, get_cart_items(self.headers.get('Cookie'))))
@@ -487,7 +610,7 @@ class VithiHandler(SimpleHTTPRequestHandler):
                 session_id = generate_session_id()
                 sessions[session_id] = email
                 self.send_response(302)
-                self.send_header('Location', '/')
+                self.send_header('Location', '/user/home')
                 c = cookies.SimpleCookie()
                 c['vithi_session'] = session_id
                 c['vithi_session']['path'] = '/'
@@ -502,26 +625,62 @@ class VithiHandler(SimpleHTTPRequestHandler):
             email = data.get('email', [''])[0].strip()
             password = data.get('password', [''])[0]
             phone = data.get('phone', [''])[0].strip()
+            captcha_expected = data.get('captcha_expected', [''])[0].strip()
+            captcha_answer = data.get('captcha_answer', [''])[0].strip()
             if not fullname or not email or not password:
-                self.respond_html(render_register(user, error='Please complete all required fields.'))
+                self.respond_html(render_register(user, error='Please complete all required fields.', fullname=fullname, email=email, phone=phone))
+                return
+            if not captcha_expected or captcha_answer != captcha_expected:
+                self.respond_html(render_register(user, error='Captcha verification failed. Please try again.', fullname=fullname, email=email, phone=phone))
                 return
             if email in users:
-                self.respond_html(render_register(user, error='Account already exists.'))
+                self.respond_html(render_register(user, error='Account already exists.', fullname=fullname, email=email, phone=phone))
                 return
-            users[email] = {'name': fullname, 'email': email, 'phone': phone, 'password': password}
+            users[email] = {
+                'name': fullname,
+                'email': email,
+                'phone': phone,
+                'address': '',
+                'password': password
+            }
             if db_ready:
                 save_user_to_db(users[email])
             else:
                 save_json_file(USERS_FILE, users)
+            session_id = generate_session_id()
+            sessions[session_id] = email
             self.send_response(302)
-            self.send_header('Location', '/login')
+            self.send_header('Location', '/user/home')
+            c = cookies.SimpleCookie()
+            c['vithi_session'] = session_id
+            c['vithi_session']['path'] = '/'
+            self.send_header('Set-Cookie', c.output(header=''))
             self.end_headers()
+            return
+
+        if path == '/user/address':
+            if not user:
+                self.redirect('/login')
+                return
+            address = data.get('address', [''])[0].strip()
+            user['address'] = address
+            users[user['email']] = user
+            if db_ready:
+                update_user_address_in_db(user['email'], address)
+            else:
+                save_json_file(USERS_FILE, users)
+            self.redirect('/user/home?updated=1')
             return
 
         if path == '/orders':
             product_name = data.get('productName', [''])[0]
             total = data.get('total', [''])[0]
-            order_record = {'productName': product_name, 'total': total, 'createdAt': self.date_time_string()}
+            order_record = {
+                'productName': product_name,
+                'total': total,
+                'userEmail': user['email'] if user else '',
+                'createdAt': self.date_time_string()
+            }
             orders.append(order_record)
             if db_ready:
                 save_order_to_db(order_record)
@@ -549,6 +708,11 @@ class VithiHandler(SimpleHTTPRequestHandler):
         c['vithi_session']['path'] = '/'
         c['vithi_session']['expires'] = 'Thu, 01 Jan 1970 00:00:00 GMT'
         self.send_header('Set-Cookie', c.output(header=''))
+        self.end_headers()
+
+    def redirect(self, location):
+        self.send_response(302)
+        self.send_header('Location', location)
         self.end_headers()
 
     def respond_html(self, content):

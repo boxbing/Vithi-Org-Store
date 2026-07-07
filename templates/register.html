@@ -7,13 +7,16 @@
       $error_block
       <form class="auth-form" method="POST" action="/register">
         <label for="fullname">Full Name</label>
-        <input id="fullname" name="fullname" type="text" placeholder="John Doe" required />
+        <input id="fullname" name="fullname" type="text" placeholder="John Doe" value="$fullname" required />
         <label for="email">Email Address</label>
-        <input id="email" name="email" type="email" placeholder="you@example.com" required />
+        <input id="email" name="email" type="email" placeholder="you@example.com" value="$email" required />
         <label for="phone">Phone Number</label>
-        <input id="phone" name="phone" type="tel" placeholder="+91 98765 43210" />
+        <input id="phone" name="phone" type="tel" placeholder="+91 98765 43210" value="$phone" />
         <label for="password">Password</label>
         <input id="password" name="password" type="password" placeholder="Create a strong password" required />
+        <label for="captcha_answer">Captcha: $captcha_question</label>
+        <input id="captcha_answer" name="captcha_answer" type="text" placeholder="Enter the answer" required />
+        <input type="hidden" name="captcha_expected" value="$captcha_expected" />
         <button type="submit" class="btn btn-primary auth-btn">Create Account</button>
       </form>
       <p class="switch-auth">Already have an account? <a href="/login">Sign in</a></p>

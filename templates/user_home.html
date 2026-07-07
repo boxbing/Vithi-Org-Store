@@ -1,0 +1,25 @@
+<main class="section container user-home-page">
+  <div class="user-home-shell">
+    <section class="user-profile-card">
+      <p class="eyebrow">Welcome</p>
+      <h1>$user_name_full</h1>
+      $message_block
+      <div class="profile-meta">
+        <p><strong>Email:</strong> $user_email</p>
+        <p><strong>Phone:</strong> $user_phone</p>
+      </div>
+      <form class="auth-form" method="POST" action="/user/address">
+        <label for="address">Delivery Address</label>
+        <textarea id="address" name="address" rows="4" placeholder="Enter your full address">$address_value</textarea>
+        <button type="submit" class="btn btn-primary auth-btn">Save Address</button>
+      </form>
+    </section>
+
+    <section class="user-orders-card">
+      <p class="eyebrow">Order History</p>
+      <h2>Previous Orders</h2>
+      $order_rows
+      <a class="btn btn-primary" href="/">Continue Shopping</a>
+    </section>
+  </div>
+</main>
