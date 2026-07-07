@@ -1,0 +1,14 @@
+{
+  "name": "vithi-organics-store",
+  "version": "1.0.0",
+  "description": "Vithi Organics storefront with Node.js backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "ejs": "^3.2.10",
+    "express": "^4.19.2"
+  }
+}

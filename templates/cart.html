@@ -1,0 +1,29 @@
+<main class="section container">
+  <div class="cart-page">
+    <h1 style="margin-bottom: 1.2rem;">Shopping Cart</h1>
+    <div class="cart-layout">
+      <div class="cart-items">
+        <div class="cart-header">
+          <p style="color: var(--muted); font-size: 0.95rem;">$item_count items in cart</p>
+        </div>
+        $cart_rows
+      </div>
+      <aside class="cart-summary">
+        <div class="summary-card">
+          <h2>Order Summary</h2>
+          <div class="summary-row"><span>Subtotal</span><strong>₹$subtotal</strong></div>
+          <div class="summary-row"><span>Shipping</span><strong>${shipping}</strong></div>
+          <div class="summary-row"><span>Tax</span><strong>₹$tax</strong></div>
+          <div class="summary-divider"></div>
+          <div class="summary-row" style="font-size: 1.1rem;"><strong>Total</strong><strong style="color: var(--green-900);">₹$total</strong></div>
+          <form method="POST" action="/orders">
+            <input type="hidden" name="productName" value="Organic Essentials" />
+            <input type="hidden" name="total" value="$total" />
+            <button class="btn btn-primary" style="width: 100%; margin-top: 1.2rem;">Proceed to Payment</button>
+          </form>
+          <a href="/" class="btn btn-secondary" style="width: 100%; display: block; text-align: center; margin-top: 0.6rem;">Continue Shopping</a>
+        </div>
+      </aside>
+    </div>
+  </div>
+</main>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Organic Turmeric Powder — Vithi Organics</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="index.html">
+          <img
+            class="brand-logo"
+            src="https://vithiorg.com/templates/default/images/VithiOrg_Logo.png"
+            alt="Vithi Organics Store logo"
+          />
+        </a>
+        <div class="mobile-search">
+          <button class="mobile-search-toggle" aria-label="Open search">🔍</button>
+          <form class="mobile-search-form" role="search" onsubmit="event.preventDefault();">
+            <input class="mobile-search-input" type="search" placeholder="Search products" aria-label="Search products" />
+            <button type="button" class="mobile-search-close" aria-label="Close search">✕</button>
+          </form>
+        </div>
+        <button class="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+        <nav class="main-nav" aria-label="Primary navigation">
+          <a href="index.html#home">Home</a>
+          <a href="index.html#categories">Categories</a>
+          <a href="index.html#best-sellers">Shop</a>
+          <a href="index.html#about">About</a>
+          <a href="index.html#contact">Contact</a>
+        </nav>
+        <div class="header-actions">
+          <form class="search-box" role="search">
+            <input type="search" placeholder="Search products" aria-label="Search products" />
+            <button type="submit" aria-label="Search">⌕</button>
+          </form>
+          <a href="login.html" class="icon-link">Login</a>
+          <a href="wishlist.html" class="icon-link">Wishlist</a>
+          <a href="cart.html" class="icon-link">Cart</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="section container">
+      <div class="product-page" style="display:grid;grid-template-columns:1fr 420px;gap:1.6rem;align-items:start;">
+        <div class="product-gallery">
+          <img id="product-main" src="https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80" alt="Organic Turmeric Powder" style="width:100%;border-radius:12px;" />
+          <div style="display:flex;gap:0.6rem;margin-top:0.8rem;">
+            <img class="thumb" src="https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=300&q=80" alt="thumb" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;" />
+            <img class="thumb" src="https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=300&q=80" alt="thumb" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;" />
+            <img class="thumb" src="https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=300&q=80" alt="thumb" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;" />
+          </div>
+          <section style="margin-top:1.2rem;">
+            <h3>Product Details</h3>
+            <p style="color:var(--muted);max-width:72ch;">This premium Organic Turmeric Powder is ethically sourced, pesticide-free, and carefully milled to retain natural curcumin benefits. Ideal for cooking and wellness rituals.</p>
+          </section>
+        </div>
+
+        <aside class="product-info" style="background:var(--white);padding:1.2rem;border-radius:12px;box-shadow:var(--shadow);">
+          <p class="eyebrow">Best Seller</p>
+          <h1 style="margin:0 0 0.6rem;">Organic Turmeric Powder — 200g</h1>
+          <div style="display:flex;align-items:center;gap:1rem;">
+            <strong style="font-size:1.35rem;color:var(--green-900);">₹249</strong>
+            <div style="color:var(--gold);">⭐ 4.9</div>
+          </div>
+          <p style="color:var(--muted);margin-top:0.8rem;">Pure, finely ground turmeric with high potency. No additives, preservatives, or bleaching agents.</p>
+
+          <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center;">
+            <label for="qty" style="font-weight:700;">Qty</label>
+            <input id="qty" type="number" min="1" value="1" style="width:72px;border:1px solid rgba(32,75,43,0.12);padding:0.5rem;border-radius:8px;" />
+          </div>
+
+          <div style="margin-top:1rem;display:flex;gap:0.6rem;">
+            <button id="buyNow" class="btn btn-primary">Buy Now</button>
+            <button id="addCart" class="btn btn-secondary">Add to Cart</button>
+          </div>
+
+          <div style="margin-top:1rem;color:var(--muted);font-size:0.95rem;">
+            <p><strong>Highlights:</strong></p>
+            <ul>
+              <li>100% Organic</li>
+              <li>Pesticide Free</li>
+              <li>Hand-picked & Sun-dried</li>
+            </ul>
+          </div>
+        </aside>
+      </div>
+
+      <section style="margin-top:2.2rem;">
+        <div class="section-heading flex-between">
+          <div>
+            <p class="eyebrow">Similar Products</p>
+            <h2>Customers Also Bought</h2>
+          </div>
+        </div>
+        <div class="card-grid product-grid" style="margin-top:1rem;">
+          <article class="card product-card">
+            <img src="https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=900&q=80" alt="product" />
+            <div class="card-body">
+              <h3>Organic Ginger Powder</h3>
+              <div class="price-row"><strong>₹199</strong><div class="actions"><button class="btn btn-primary">Buy</button></div></div>
+            </div>
+          </article>
+          <article class="card product-card">
+            <img src="https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=900&q=80" alt="product" />
+            <div class="card-body">
+              <h3>Herbal Immunity Mix</h3>
+              <div class="price-row"><strong>₹349</strong><div class="actions"><button class="btn btn-primary">Buy</button></div></div>
+            </div>
+          </article>
+          <article class="card product-card">
+            <img src="https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=900&q=80" alt="product" />
+            <div class="card-body">
+              <h3>Wildflower Organic Honey</h3>
+              <div class="price-row"><strong>₹399</strong><div class="actions"><button class="btn btn-primary">Buy</button></div></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section style="margin-top:2.2rem;">
+        <div class="section-heading flex-between">
+          <div>
+            <p class="eyebrow">Best Sellers</p>
+            <h2>Top Picks</h2>
+          </div>
+        </div>
+        <div class="card-grid product-grid" style="margin-top:1rem;">
+          <article class="card product-card">
+            <img src="https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=80" alt="product" />
+            <div class="card-body"><h3>Ayurvedic Tea Blend</h3><div class="price-row"><strong>₹299</strong><div class="actions"><button class="btn btn-primary">Buy</button></div></div></div>
+          </article>
+          <article class="card product-card">
+            <img src="https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?auto=format&fit=crop&w=900&q=80" alt="product" />
+            <div class="card-body"><h3>Botanical Face Serum</h3><div class="price-row"><strong>₹599</strong><div class="actions"><button class="btn btn-primary">Buy</button></div></div></div>
+          </article>
+          <article class="card product-card">
+            <img src="https://images.unsplash.com/photo-1466637574441-749b8f19452f?auto=format&fit=crop&w=900&q=80" alt="product" />
+            <div class="card-body"><h3>Organic Oils Collection</h3><div class="price-row"><strong>₹449</strong><div class="actions"><button class="btn btn-primary">Buy</button></div></div></div>
+          </article>
+        </div>
+      </section>
+
+      <section style="margin-top:2.2rem;">
+        <div class="section-heading flex-between">
+          <div>
+            <p class="eyebrow">Customer Reviews</p>
+            <h2>What people say</h2>
+          </div>
+        </div>
+        <div class="card-grid review-grid" style="margin-top:1rem;">
+          <article class="card review-card"><p>"Great aroma and potency — noticeable difference in my cooking."</p><strong>— Ritu S.</strong><span>★★★★★</span></article>
+          <article class="card review-card"><p>"Prompt delivery and lovely packaging. My go-to turmeric now."</p><strong>— Aman K.</strong><span>★★★★★</span></article>
+          <article class="card review-card"><p>"Trusted product — I use it daily in warm milk."</p><strong>— Priya M.</strong><span>★★★★☆</span></article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer" id="contact">
+      <div class="container footer-grid">
+        <div>
+          <a class="brand footer-brand" href="index.html">
+            <img
+              class="brand-logo"
+              src="https://vithiorg.com/templates/default/images/VithiOrg_Logo.png"
+              alt="Vithi Organics Store logo"
+            />
+          </a>
+          <p>Pure, natural, and trustworthy wellness essentials for modern life.</p>
+        </div>
+        <div>
+          <h3>Categories</h3>
+          <a href="#">Fruits & Vegetables</a>
+          <a href="#">Herbs</a>
+          <a href="#">Pantry</a>
+          <a href="#">Skincare</a>
+        </div>
+        <div>
+          <h3>Support</h3>
+          <a href="#">Shipping & Returns</a>
+          <a href="#">Contact Us</a>
+          <a href="#">FAQs</a>
+          <a href="#">Track Order</a>
+        </div>
+        <div>
+          <h3>Contact</h3>
+          <p>info@vithiOrg.com</p>
+          <p>+91 986 844 3555</p>
+          <p>New Delhi, India</p>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      // Thumbnail -> main image
+      document.addEventListener('click', function (e) {
+        if (e.target.classList.contains('thumb')) {
+          document.getElementById('product-main').src = e.target.src.replace('w=300', 'w=1200');
+        }
+        if (e.target.id === 'buyNow') {
+          const qty = document.getElementById('qty').value || 1;
+          alert('Proceed to buy ' + qty + ' item(s). (Demo)');
+        }
+        if (e.target.id === 'addCart') {
+          const qty = document.getElementById('qty').value || 1;
+          alert('Added ' + qty + ' item(s) to cart. (Demo)');
+        }
+      });
+    </script>
+  </body>
+</html>

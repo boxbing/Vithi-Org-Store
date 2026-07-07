@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wishlist — Vithi Organics</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="index.html">
+          <img
+            class="brand-logo"
+            src="https://vithiorg.com/templates/default/images/VithiOrg_Logo.png"
+            alt="Vithi Organics Store logo"
+          />
+        </a>
+        <div class="mobile-search">
+          <button class="mobile-search-toggle" aria-label="Open search">🔍</button>
+          <form class="mobile-search-form" role="search" onsubmit="event.preventDefault();">
+            <input class="mobile-search-input" type="search" placeholder="Search products" aria-label="Search products" />
+            <button type="button" class="mobile-search-close" aria-label="Close search">✕</button>
+          </form>
+        </div>
+        <button class="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+        <nav class="main-nav" aria-label="Primary navigation">
+          <a href="index.html#home">Home</a>
+          <a href="index.html#categories">Categories</a>
+          <a href="index.html#best-sellers">Shop</a>
+          <a href="index.html#about">About</a>
+          <a href="index.html#contact">Contact</a>
+        </nav>
+        <div class="header-actions">
+          <form class="search-box" role="search">
+            <input type="search" placeholder="Search products" aria-label="Search products" />
+            <button type="submit" aria-label="Search">⌕</button>
+          </form>
+          <a href="login.html" class="icon-link">Login</a>
+          <a href="wishlist.html" class="icon-link">Wishlist</a>
+          <a href="cart.html" class="icon-link">Cart</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="section container">
+      <div class="wishlist-page">
+        <section class="wishlist-hero">
+          <div>
+            <p class="eyebrow">Your saved picks</p>
+            <h1>Wishlist</h1>
+            <p>Curated essentials you’ve saved for later. Move them to your cart whenever you’re ready.</p>
+          </div>
+          <div class="wishlist-actions">
+            <button class="btn btn-primary">Add all to cart</button>
+            <button class="btn btn-secondary">Share list</button>
+          </div>
+        </section>
+
+        <div class="wishlist-grid">
+          <div class="wishlist-items">
+            <div class="wishlist-summary">
+              <strong>4 items saved</strong>
+              <button class="text-link">Clear wishlist</button>
+            </div>
+
+            <article class="wishlist-item">
+              <img src="https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=900&q=80" alt="Organic Turmeric Powder" />
+              <div class="wishlist-item-body">
+                <div class="wishlist-item-top">
+                  <div>
+                    <h3>Organic Turmeric Powder</h3>
+                    <p>Antioxidant-rich spice for daily wellness rituals.</p>
+                  </div>
+                  <span class="badge">Best Seller</span>
+                </div>
+                <div class="wishlist-item-meta">
+                  <span>200g</span>
+                  <strong>₹249</strong>
+                </div>
+                <div class="wishlist-item-actions">
+                  <button class="btn btn-primary">Move to cart</button>
+                  <button class="btn btn-secondary">Remove</button>
+                </div>
+              </div>
+            </article>
+
+            <article class="wishlist-item">
+              <img src="https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=900&q=80" alt="Botanical Face Serum" />
+              <div class="wishlist-item-body">
+                <div class="wishlist-item-top">
+                  <div>
+                    <h3>Botanical Face Serum</h3>
+                    <p>Lightweight nourishment for calm, glowing skin.</p>
+                  </div>
+                  <span class="badge">New</span>
+                </div>
+                <div class="wishlist-item-meta">
+                  <span>30ml</span>
+                  <strong>₹599</strong>
+                </div>
+                <div class="wishlist-item-actions">
+                  <button class="btn btn-primary">Move to cart</button>
+                  <button class="btn btn-secondary">Remove</button>
+                </div>
+              </div>
+            </article>
+
+            <article class="wishlist-item">
+              <img src="https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=900&q=80" alt="Wildflower Organic Honey" />
+              <div class="wishlist-item-body">
+                <div class="wishlist-item-top">
+                  <div>
+                    <h3>Wildflower Organic Honey</h3>
+                    <p>Pure sweetness with floral richness and natural goodness.</p>
+                  </div>
+                  <span class="badge">Popular</span>
+                </div>
+                <div class="wishlist-item-meta">
+                  <span>500ml</span>
+                  <strong>₹399</strong>
+                </div>
+                <div class="wishlist-item-actions">
+                  <button class="btn btn-primary">Move to cart</button>
+                  <button class="btn btn-secondary">Remove</button>
+                </div>
+              </div>
+            </article>
+
+            <article class="wishlist-item">
+              <img src="https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=80" alt="Ayurvedic Tea Blend" />
+              <div class="wishlist-item-body">
+                <div class="wishlist-item-top">
+                  <div>
+                    <h3>Ayurvedic Tea Blend</h3>
+                    <p>Soothing blend with tulsi, ginger, and spices.</p>
+                  </div>
+                  <span class="badge">Seasonal</span>
+                </div>
+                <div class="wishlist-item-meta">
+                  <span>100g</span>
+                  <strong>₹299</strong>
+                </div>
+                <div class="wishlist-item-actions">
+                  <button class="btn btn-primary">Move to cart</button>
+                  <button class="btn btn-secondary">Remove</button>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <aside class="wishlist-sidebar">
+            <div class="summary-card">
+              <h2>Why use your wishlist?</h2>
+              <ul class="feature-list">
+                <li>Save your favorite wellness essentials in one place.</li>
+                <li>Keep track of products you want to compare or buy later.</li>
+                <li>Move items into your cart instantly when you are ready.</li>
+              </ul>
+              <a class="btn btn-secondary" href="index.html#best-sellers">Continue shopping</a>
+            </div>
+          </aside>
+        </div>
+
+        <section class="section wishlist-recommendations">
+          <div class="section-heading flex-between">
+            <div>
+              <p class="eyebrow">More to discover</p>
+              <h2>Recommended for you</h2>
+            </div>
+          </div>
+          <div class="card-grid product-grid">
+            <article class="card product-card">
+              <img src="https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?auto=format&fit=crop&w=900&q=80" alt="Herbal Oil Blend" />
+              <div class="card-body">
+                <div class="card-meta"><span>⭐ 4.8</span></div>
+                <h3>Herbal Oil Blend</h3>
+                <p>Premium therapeutic oil for body massage and skincare rituals.</p>
+                <div class="price-row">
+                  <strong>₹449</strong>
+                  <div class="actions">
+                    <button>Add to Cart</button>
+                    <button class="ghost">♡</button>
+                  </div>
+                </div>
+              </div>
+            </article>
+            <article class="card product-card">
+              <img src="https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=80" alt="Organic Neem Powder" />
+              <div class="card-body">
+                <div class="card-meta"><span>⭐ 4.7</span></div>
+                <h3>Organic Neem Powder</h3>
+                <p>Pure neem for natural immunity support and wellness routines.</p>
+                <div class="price-row">
+                  <strong>₹199</strong>
+                  <div class="actions">
+                    <button>Add to Cart</button>
+                    <button class="ghost">♡</button>
+                  </div>
+                </div>
+              </div>
+            </article>
+            <article class="card product-card">
+              <img src="https://images.unsplash.com/photo-1471864190281-a93a3070b6de?auto=format&fit=crop&w=900&q=80" alt="Organic Pantry Essentials" />
+              <div class="card-body">
+                <div class="card-meta"><span>⭐ 4.9</span></div>
+                <h3>Organic Pantry Essentials</h3>
+                <p>Essential grains and spices for wholesome, everyday cooking.</p>
+                <div class="price-row">
+                  <strong>₹329</strong>
+                  <div class="actions">
+                    <button>Add to Cart</button>
+                    <button class="ghost">♡</button>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="site-footer" id="contact">
+      <div class="container footer-grid">
+        <div>
+          <a class="brand footer-brand" href="index.html">
+            <img
+              class="brand-logo"
+              src="https://vithiorg.com/templates/default/images/VithiOrg_Logo.png"
+              alt="Vithi Organics Store logo"
+            />
+          </a>
+          <p>Pure, natural, and trustworthy wellness essentials for modern life.</p>
+        </div>
+        <div>
+          <h3>Categories</h3>
+          <a href="#">Fruits & Vegetables</a>
+          <a href="#">Herbs</a>
+          <a href="#">Pantry</a>
+          <a href="#">Skincare</a>
+        </div>
+        <div>
+          <h3>Support</h3>
+          <a href="#">Shipping & Returns</a>
+          <a href="#">Contact Us</a>
+          <a href="#">FAQs</a>
+          <a href="#">Track Order</a>
+        </div>
+        <div>
+          <h3>Contact</h3>
+          <p>info@vithiOrg.com</p>
+          <p>+91 986 844 3555</p>
+          <p>New Delhi, India</p>
+        </div>
+      </div>
+    </footer>
+
+    <script src="script.js"></script>
+  </body>
+</html>

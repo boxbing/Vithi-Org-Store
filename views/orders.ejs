@@ -1,0 +1,24 @@
+<%- include('partials/header') %>
+
+<main class="section container">
+  <div class="login-shell">
+    <div class="login-card">
+      <p class="eyebrow">Recent activity</p>
+      <h1>Your Orders</h1>
+      <% if (orders.length === 0) { %>
+        <p class="login-copy">You have no orders yet.</p>
+      <% } else { %>
+        <ul style="padding-left: 1rem; color: var(--muted);">
+          <% orders.forEach((order) => { %>
+            <li style="margin-bottom:0.6rem;">
+              <strong><%= order.productName %></strong> — ₹<%= order.total %> on <%= order.createdAt %>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+      <a class="btn btn-primary" href="/" style="margin-top:1rem;">Continue Shopping</a>
+    </div>
+  </div>
+</main>
+
+<%- include('partials/footer') %>

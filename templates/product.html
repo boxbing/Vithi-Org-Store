@@ -1,0 +1,32 @@
+<main class="section container">
+  <div class="product-page" style="display:grid;grid-template-columns:1fr 420px;gap:1.6rem;align-items:start;">
+    <div class="product-gallery">
+      <img src="$product_image" alt="$product_name" style="width:100%;border-radius:12px;" />
+      <section style="margin-top:1.2rem;">
+        <h3>Product Details</h3>
+        <p style="color:var(--muted);max-width:72ch;">$product_description</p>
+      </section>
+    </div>
+
+    <aside class="product-info" style="background:var(--white);padding:1.2rem;border-radius:12px;box-shadow:var(--shadow);">
+      <p class="eyebrow">Best Seller</p>
+      <h1 style="margin:0 0 0.6rem;">$product_name</h1>
+      <div style="display:flex;align-items:center;gap:1rem;">
+        <strong style="font-size:1.35rem;color:var(--green-900);">₹$product_price</strong>
+        <div style="color:var(--gold);">⭐ 4.9</div>
+      </div>
+      <p style="color:var(--muted);margin-top:0.8rem;">Pure, ethically sourced organic essentials crafted for everyday wellness.</p>
+
+      <div style="margin-top:1rem;display:flex;gap:0.6rem;">
+        <form method="post" action="/cart/add" style="display:inline;">
+          <input type="hidden" name="productId" value="$product_id" />
+          <button class="btn btn-primary" type="submit">Add to Cart</button>
+        </form>
+        <form method="post" action="/wishlist/add" style="display:inline;">
+          <input type="hidden" name="productId" value="$product_id" />
+          <button class="btn btn-secondary" type="submit">Add to Wishlist</button>
+        </form>
+      </div>
+    </aside>
+  </div>
+</main>
