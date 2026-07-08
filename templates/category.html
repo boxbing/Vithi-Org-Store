@@ -1,0 +1,70 @@
+<main class="section container category-page">
+  $category_status_block
+  <section class="category-hero">
+    <img src="$category_image" alt="$category_name" />
+    <div class="category-hero-copy">
+      <p class="eyebrow">Category Collection</p>
+      <h1>$category_name</h1>
+      <p class="category-breadcrumb"><a href="/">Home</a> / <span>$category_name</span></p>
+      <div class="category-description">$category_description</div>
+      <p class="category-meta">$category_total_count product(s) in this category</p>
+    </div>
+  </section>
+
+  <section class="category-layout" aria-label="Category products and filters">
+    <div class="category-main">
+      <form class="category-toolbar" method="get" action="/category/$category_slug">
+        <div class="category-toolbar-group">
+          <label for="sort">Sort By</label>
+          <select id="sort" name="sort">
+            <option value="featured" $sort_featured_selected>Featured</option>
+            <option value="name_asc" $sort_name_asc_selected>Name A-Z</option>
+            <option value="name_desc" $sort_name_desc_selected>Name Z-A</option>
+            <option value="price_low" $sort_price_low_selected>Price: Low to High</option>
+            <option value="price_high" $sort_price_high_selected>Price: High to Low</option>
+          </select>
+        </div>
+        <input type="hidden" name="q" value="$search_query" />
+        <input type="hidden" name="page" value="1" />
+        <button class="btn btn-primary" type="submit">Apply</button>
+      </form>
+
+      <div class="category-result-head">
+        <p>$category_result_summary</p>
+      </div>
+
+      <div class="card-grid product-grid category-product-grid">
+        $category_product_cards
+      </div>
+
+      <nav class="category-pagination" aria-label="Category pagination">
+        $category_pagination
+      </nav>
+    </div>
+
+    <aside class="category-sidebar">
+      <section class="category-side-card">
+        <h3>Active Categories</h3>
+        <div class="category-side-links">
+          $sidebar_category_links
+        </div>
+      </section>
+
+      <section class="category-side-card">
+        <h3>Recommended Products</h3>
+        <div class="category-search-matches">
+          $recommended_items
+        </div>
+      </section>
+
+      <section class="category-side-card">
+        <h3>Search Matches</h3>
+        <div class="category-search-matches">
+          $search_match_items
+        </div>
+      </section>
+    </aside>
+  </section>
+
+  $recently_viewed_block
+</main>

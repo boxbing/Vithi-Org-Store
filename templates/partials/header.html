@@ -5,8 +5,8 @@
     </a>
     <div class="mobile-search">
       <button class="mobile-search-toggle" aria-label="Open search">🔍</button>
-      <form class="mobile-search-form" role="search" onsubmit="event.preventDefault();">
-        <input class="mobile-search-input" type="search" placeholder="Search products" aria-label="Search products" />
+      <form class="mobile-search-form" role="search" method="get" action="$search_action">
+        <input class="mobile-search-input" type="search" name="q" value="$search_query" placeholder="Search products" aria-label="Search products" />
         <button type="button" class="mobile-search-close" aria-label="Close search">✕</button>
       </form>
     </div>
@@ -21,8 +21,8 @@
       <a href="/#contact">Contact</a>
     </nav>
     <div class="header-actions">
-      <form class="search-box" role="search">
-        <input type="search" placeholder="Search products" aria-label="Search products" />
+      <form class="search-box" role="search" method="get" action="$search_action">
+        <input type="search" name="q" value="$search_query" placeholder="Search products" aria-label="Search products" />
         <button type="submit" aria-label="Search">⌕</button>
       </form>
       <a href="$login_href" class="icon-link">$login_label</a>

@@ -10,7 +10,7 @@ from datetime import datetime
 from http import cookies
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from string import Template
-from urllib.parse import parse_qs, urlparse, quote
+from urllib.parse import parse_qs, urlparse, quote, unquote
 
 try:
     import psycopg
@@ -553,10 +553,25 @@ def load_admin_template(name):
 
 
 def make_template(name, **context):
+    context.setdefault('meta_description', 'Vithi Organics offers trusted organic essentials for healthy living.')
+    context.setdefault('meta_keywords', 'organic, wellness, natural, healthy')
+    context.setdefault('meta_robots', 'index,follow')
+    context.setdefault('canonical_url', '')
+    context.setdefault('search_action', '/')
+    context.setdefault('search_query', '')
     body = Template(load_template(name)).substitute(**context)
     header = Template(load_template('partials/header.html')).substitute(**context)
     footer = Template(load_template('partials/footer.html')).substitute(**context)
-    return Template(load_template('base.html')).substitute(title=context.get('title', 'Vithi Organics'), header=header, content=body, footer=footer)
+    return Template(load_template('base.html')).substitute(
+        title=context.get('title', 'Vithi Organics'),
+        meta_description=context.get('meta_description', ''),
+        meta_keywords=context.get('meta_keywords', ''),
+        meta_robots=context.get('meta_robots', 'index,follow'),
+        canonical_url=context.get('canonical_url', ''),
+        header=header,
+        content=body,
+        footer=footer,
+    )
 
 
 def get_user_from_cookie(cookie_header):
@@ -599,36 +614,6 @@ def generate_captcha_challenge():
     left = random.randint(1, 9)
     right = random.randint(1, 9)
     return f'What is {left} + {right}?', str(left + right)
-    
-def generate_image_captcha():
-    allowed = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-    token = ''.join(random.choice(allowed) for _ in range(5))
-    lines = []
-    for _ in range(4):
-        x1 = random.randint(0, 220)
-        y1 = random.randint(8, 64)
-        x2 = random.randint(0, 220)
-        y2 = random.randint(8, 64)
-        stroke = random.choice(['#3d7a42', '#7b5b3a', '#c7a24b', '#566a7f'])
-        lines.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{stroke}" stroke-width="2" opacity="0.6" />')
-    
-    svg = (
-        '<svg xmlns="http://www.w3.org/2000/svg" width="260" height="80" viewBox="0 0 260 80">'
-        '<rect width="260" height="80" rx="12" fill="#f7f2e8" />'
-        f'{"".join(lines)}'
-        '<g font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" letter-spacing="5">'
-    )
-    
-    start_x = 28
-    for index, char in enumerate(token):
-        rotate = random.randint(-18, 18)
-        y = random.randint(42, 55)
-        fill = random.choice(['#204b2b', '#7b5b3a', '#0b2a16'])
-        x = start_x + index * 42
-        svg += f'<text x="{x}" y="{y}" transform="rotate({rotate} {x} {y})" fill="{fill}">{char}</text>'
-    svg += '</g></svg>'
-    
-    return 'data:image/svg+xml;charset=UTF-8,' + quote(svg), token
 
 
 def generate_image_captcha():
@@ -740,29 +725,275 @@ def get_wishlist_items(cookie_header):
     return wishlist.get(wishlist_session_id, {})
 
 
-def render_index(user):
+def get_online_categories():
+    visible = [item for item in categories if item.get('status', 'online') == 'online']
+    return sorted(visible, key=lambda item: int(item.get('displayOrder', 999999)))
+
+
+def get_category_by_slug(slug):
+    normalized = slug.strip().lower()
+    for category in categories:
+        if category.get('seoSlug', '').strip().lower() == normalized:
+            return category
+    return None
+
+
+def get_products_for_category(category_id):
+    return [item for item in products if str(item.get('categoryId')) == str(category_id)]
+
+
+def pick_category_image(category, category_products):
+    image_path = str(category.get('imagePath', '')).strip()
+    if image_path.startswith('/'):
+        disk_path = os.path.join(DATA_DIR, image_path.lstrip('/'))
+        if os.path.exists(disk_path):
+            return image_path
+    elif image_path:
+        return image_path
+
+    if category_products:
+        return str(category_products[0].get('image', ''))
+    return 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=900&q=80'
+
+
+def build_product_card(product):
+    weight_label = f'{float(product.get("weightKg", 1.0)):.2f} kg'
+    return (
+        f'<article class="card product-card">'
+        f'<a class="product-link" href="/products/{product["id"]}"><img src="{product["image"]}" alt="{product["name"]}" /></a>'
+        f'<div class="card-body">'
+        f'<h3><a href="/products/{product["id"]}">{product["name"]}</a></h3>'
+        f'<p>{product["description"]}</p>'
+        f'<span class="card-meta">Weight: {weight_label}</span>'
+        f'<div class="price-row"><strong>₹{product["price"]}</strong><div class="actions">'
+        f'<form method="post" action="/cart/add" style="display:inline;">'
+        f'<input type="hidden" name="productId" value="{product["id"]}" />'
+        f'<button class="btn btn-primary" type="submit">Add to Cart</button>'
+        f'</form>'
+        f'<form method="post" action="/wishlist/add" style="display:inline;">'
+        f'<input type="hidden" name="productId" value="{product["id"]}" />'
+        f'<button class="btn product-wishlist-btn wishlist-icon-btn" type="submit" aria-label="Add to wishlist" title="Add to wishlist">&#9829;</button>'
+        f'</form></div></div>'
+        f'</div></article>'
+    )
+
+
+def get_recently_viewed_ids(cookie_header):
+    raw = get_cookie_value(cookie_header, 'vithi_recently_viewed')
+    if not raw:
+        return []
+    known_ids = {str(item.get('id')) for item in products}
+    unique_ids = []
+    for token in raw.split(','):
+        item_id = token.strip()
+        if item_id and item_id in known_ids and item_id not in unique_ids:
+            unique_ids.append(item_id)
+    return unique_ids[:8]
+
+
+def build_recently_viewed_cookie(cookie_header, product_id):
+    seen = get_recently_viewed_ids(cookie_header)
+    pid = str(product_id)
+    seen = [item for item in seen if item != pid]
+    seen.insert(0, pid)
+    return ','.join(seen[:8])
+
+
+def render_recently_viewed_block(cookie_header):
+    viewed_ids = get_recently_viewed_ids(cookie_header)
+    if not viewed_ids:
+        return ''
+
     cards = []
-    for product in products:
-        weight_label = f'{float(product.get("weightKg", 1.0)):.2f} kg'
-        cards.append(
-            f'<article class="card product-card">'
-            f'<a class="product-link" href="/products/{product["id"]}"><img src="{product["image"]}" alt="{product["name"]}" /></a>'
-            f'<div class="card-body">'
-            f'<h3><a href="/products/{product["id"]}">{product["name"]}</a></h3>'
-            f'<p>{product["description"]}</p>'
-            f'<span class="card-meta">Weight: {weight_label}</span>'
-            f'<div class="price-row"><strong>₹{product["price"]}</strong><div class="actions">'
-            f'<form method="post" action="/cart/add" style="display:inline;">'
-            f'<input type="hidden" name="productId" value="{product["id"]}" />'
-            f'<button class="btn btn-primary" type="submit">Add to Cart</button>'
-            f'</form>'
-            f'<form method="post" action="/wishlist/add" style="display:inline;">'
-            f'<input type="hidden" name="productId" value="{product["id"]}" />'
-            f'<button class="btn product-wishlist-btn wishlist-icon-btn" type="submit" aria-label="Add to wishlist" title="Add to wishlist">&#9829;</button>'
-            f'</form></div></div>'
-            f'</div></article>'
+    for item_id in viewed_ids:
+        product = next((item for item in products if str(item['id']) == item_id), None)
+        if product is None:
+            continue
+        cards.append(build_product_card(product))
+
+    if not cards:
+        return ''
+
+    return (
+        '<section class="section container recently-viewed-section">'
+        '<div class="section-heading"><p class="eyebrow">Recently Viewed</p><h2>Pick Up Where You Left Off</h2></div>'
+        f'<div class="card-grid product-grid">{"".join(cards)}</div>'
+        '</section>'
+    )
+
+
+def render_index(user, cookie_header='', query=None):
+    query = query or {}
+    product_cards = ''.join(build_product_card(item) for item in products)
+
+    category_cards = []
+    for category in get_online_categories():
+        category_products = get_products_for_category(category.get('id'))
+        description_text = re.sub(r'<[^>]+>', '', str(category.get('descriptionHtml', ''))).strip()
+        category_image = pick_category_image(category, category_products)
+        category_cards.append(
+            f'<article class="card category-card">'
+            f'<a href="/category/{html.escape(category.get("seoSlug", ""))}">'
+            f'<img src="{html.escape(category_image)}" alt="{html.escape(category.get("name", "Category"))}" />'
+            '</a>'
+            '<div class="card-body">'
+            f'<h3><a href="/category/{html.escape(category.get("seoSlug", ""))}">{html.escape(category.get("name", "Category"))}</a></h3>'
+            f'<p>{html.escape(description_text or "Explore this category")}</p>'
+            f'<span>{len(category_products)} products</span>'
+            '</div></article>'
         )
-    return make_template('index.html', title='Vithi Organics', product_cards=''.join(cards), **get_template_user_context(user))
+
+    status = query.get('status', [''])[0].strip().lower()
+    requested_category = query.get('category', [''])[0].strip()
+    category_status_block = ''
+    if status == 'notfound' and requested_category:
+        category_status_block = '<p class="error-message">Requested category is unavailable right now. Please choose another category.</p>'
+
+    return make_template(
+        'index.html',
+        title='Vithi Organics',
+        product_cards=product_cards,
+        category_cards=''.join(category_cards),
+        recently_viewed_block=render_recently_viewed_block(cookie_header),
+        category_status_block=category_status_block,
+        **get_template_user_context(user)
+    )
+
+
+def render_category_page(user, cookie_header, category, query):
+    search_query = query.get('q', [''])[0].strip()
+    sort_key = query.get('sort', ['featured'])[0].strip().lower() or 'featured'
+    page_text = query.get('page', ['1'])[0].strip()
+
+    try:
+        current_page = int(page_text)
+    except ValueError:
+        current_page = 1
+    current_page = max(1, current_page)
+
+    category_products = get_products_for_category(category.get('id'))
+    filtered = category_products[:]
+    if search_query:
+        token = search_query.lower()
+        filtered = [
+            item for item in filtered
+            if token in item.get('name', '').lower() or token in item.get('description', '').lower()
+        ]
+
+    if sort_key == 'name_asc':
+        filtered.sort(key=lambda item: item.get('name', '').lower())
+    elif sort_key == 'name_desc':
+        filtered.sort(key=lambda item: item.get('name', '').lower(), reverse=True)
+    elif sort_key == 'price_low':
+        filtered.sort(key=lambda item: float(item.get('price', 0)))
+    elif sort_key == 'price_high':
+        filtered.sort(key=lambda item: float(item.get('price', 0)), reverse=True)
+    else:
+        sort_key = 'featured'
+
+    per_page = 10
+    total = len(filtered)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    if current_page > total_pages:
+        current_page = total_pages
+    start = (current_page - 1) * per_page
+    page_products = filtered[start:start + per_page]
+
+    if page_products:
+        product_cards = ''.join(build_product_card(item) for item in page_products)
+    else:
+        product_cards = '<article class="card category-empty-card"><div class="card-body"><h3>No products found</h3><p>Try a different search term or browse another category.</p></div></article>'
+
+    pagination_links = []
+    for page in range(1, total_pages + 1):
+        href = f'/category/{quote(category.get("seoSlug", ""))}?page={page}&sort={quote(sort_key)}&q={quote(search_query)}'
+        css_class = 'active' if page == current_page else ''
+        pagination_links.append(f'<a class="{css_class}" href="{href}">{page}</a>')
+    pagination_block = ''.join(pagination_links) if pagination_links else '<span class="active">1</span>'
+
+    sidebar_links = []
+    current_slug = category.get('seoSlug', '')
+    for item in get_online_categories():
+        slug = item.get('seoSlug', '')
+        css_class = 'category-link-active' if slug == current_slug else ''
+        sidebar_links.append(
+            f'<a class="{css_class}" href="/category/{quote(slug)}">{html.escape(item.get("name", "Category"))}</a>'
+        )
+    sidebar_links_block = ''.join(sidebar_links) or '<p class="login-copy">No active categories.</p>'
+
+    search_matches = []
+    if search_query:
+        token = search_query.lower()
+        in_category = [
+            item for item in category_products
+            if token in item.get('name', '').lower() or token in item.get('description', '').lower()
+        ]
+        other = [
+            item for item in products
+            if str(item.get('categoryId')) != str(category.get('id')) and (token in item.get('name', '').lower() or token in item.get('description', '').lower())
+        ]
+
+        for item in in_category[:5]:
+            search_matches.append(
+                f'<a class="search-match-item" href="/products/{item["id"]}">'
+                f'<img src="{item["image"]}" alt="{html.escape(item["name"])}" />'
+                f'<div><strong>{html.escape(item["name"])}</strong><small>In this category</small></div>'
+                '</a>'
+            )
+        for item in other[:5]:
+            search_matches.append(
+                f'<a class="search-match-item" href="/products/{item["id"]}">'
+                f'<img src="{item["image"]}" alt="{html.escape(item["name"])}" />'
+                f'<div><strong>{html.escape(item["name"])}</strong><small>Similar result</small></div>'
+                '</a>'
+            )
+    search_match_items = ''.join(search_matches) if search_matches else '<p class="login-copy">Search to see matching products.</p>'
+
+    recommended = [item for item in products if str(item.get('categoryId')) != str(category.get('id'))][:4]
+    recommended_items = []
+    for item in recommended:
+        recommended_items.append(
+            f'<a class="search-match-item" href="/products/{item["id"]}">'
+            f'<img src="{item["image"]}" alt="{html.escape(item["name"])}" />'
+            f'<div><strong>{html.escape(item["name"])}</strong><small>₹{item["price"]}</small></div>'
+            '</a>'
+        )
+    recommended_block = ''.join(recommended_items) if recommended_items else '<p class="login-copy">No recommendations available.</p>'
+
+    result_summary = f'Showing {len(page_products)} of {total} result(s)'
+    category_description = category.get('descriptionHtml', '') or '<p>Explore this curated collection.</p>'
+    category_image = pick_category_image(category, category_products)
+
+    canonical = category.get('canonicalUrl', '').strip() or f'/category/{category.get("seoSlug", "")}'
+
+    return make_template(
+        'category.html',
+        title=category.get('metaTitle', '') or category.get('name', 'Category'),
+        meta_description=category.get('metaDescription', '') or f'Explore {category.get("name", "")}.',
+        meta_keywords=category.get('metaKeywords', '') or 'organic category',
+        canonical_url=canonical,
+        search_action=f'/category/{quote(category.get("seoSlug", ""))}',
+        category_status_block='',
+        category_name=html.escape(category.get('name', 'Category')),
+        category_slug=quote(category.get('seoSlug', '')),
+        category_description=category_description,
+        category_total_count=len(category_products),
+        category_image=html.escape(category_image),
+        category_result_summary=result_summary,
+        category_product_cards=product_cards,
+        category_pagination=pagination_block,
+        sidebar_category_links=sidebar_links_block,
+        search_match_items=search_match_items,
+        recommended_items=recommended_block,
+        search_query=html.escape(search_query),
+        sort_featured_selected='selected' if sort_key == 'featured' else '',
+        sort_name_asc_selected='selected' if sort_key == 'name_asc' else '',
+        sort_name_desc_selected='selected' if sort_key == 'name_desc' else '',
+        sort_price_low_selected='selected' if sort_key == 'price_low' else '',
+        sort_price_high_selected='selected' if sort_key == 'price_high' else '',
+        recently_viewed_block=render_recently_viewed_block(cookie_header),
+        **get_template_user_context(user)
+    )
 
 
 def render_product(user, product, review_message=''):
@@ -1174,7 +1405,15 @@ class VithiHandler(SimpleHTTPRequestHandler):
         path = parsed.path
 
         if path == '/':
-            self.respond_html(render_index(user))
+            self.respond_html(render_index(user, self.headers.get('Cookie'), parse_qs(parsed.query)))
+            return
+        if path.startswith('/category/'):
+            slug = unquote(path[len('/category/'):]).strip().strip('/')
+            category = get_category_by_slug(slug)
+            if category is None or category.get('status', 'online') != 'online':
+                self.redirect(f'/?category={quote(slug)}&status=notfound')
+                return
+            self.respond_html(render_category_page(user, self.headers.get('Cookie'), category, parse_qs(parsed.query)))
             return
         if path.startswith('/products/'):
             product_id = path.split('/')[-1]
@@ -1185,7 +1424,14 @@ class VithiHandler(SimpleHTTPRequestHandler):
                 return
             params = parse_qs(parsed.query)
             review_message = params.get('review', [''])[0]
-            self.respond_html(render_product(user, product, review_message=review_message))
+            recently_cookie_value = build_recently_viewed_cookie(self.headers.get('Cookie'), product['id'])
+            cookie = cookies.SimpleCookie()
+            cookie['vithi_recently_viewed'] = recently_cookie_value
+            cookie['vithi_recently_viewed']['path'] = '/'
+            self.respond_html(
+                render_product(user, product, review_message=review_message),
+                extra_headers=[('Set-Cookie', cookie.output(header=''))]
+            )
             return
         if path == '/login':
             if user:
@@ -1708,7 +1954,13 @@ class VithiHandler(SimpleHTTPRequestHandler):
             urls.append({'loc': f'{base}{p}', 'lastmod': today, 'priority': '0.8' if p == '' else '0.6'})
         for product in products:
             urls.append({
-                'loc': f"{base}/product?id={product['id']}",
+                'loc': f"{base}/products/{product['id']}",
+                'lastmod': today,
+                'priority': '0.7'
+            })
+        for category in get_online_categories():
+            urls.append({
+                'loc': f"{base}/category/{quote(category.get('seoSlug', ''))}",
                 'lastmod': today,
                 'priority': '0.7'
             })
