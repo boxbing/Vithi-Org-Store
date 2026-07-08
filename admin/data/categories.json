@@ -66,5 +66,22 @@
     "metaDescription": "Healthy tea infusions",
     "metaKeywords": "herbal,tea",
     "canonicalUrl": ""
+  },
+  {
+    "id": 5,
+    "name": "Sanjeev Test",
+    "descriptionHtml": "alsdkjf alsjfalskfjalsksalkd flkasdf",
+    "displayOrder": 1,
+    "imagePath": "/assets/category-images/sanjeev-test-1783502240.png",
+    "createdAt": "2026-07-08T14:47:20",
+    "modifiedAt": "2026-07-08T14:47:20",
+    "createdBy": "admin",
+    "modifiedBy": "admin",
+    "status": "online",
+    "seoSlug": "sanjeev-test",
+    "metaTitle": "askljd fasjdfk",
+    "metaDescription": "lasdjkf owejl",
+    "metaKeywords": "lsadf kjsldfjsalfdlfas d",
+    "canonicalUrl": "sw234902034"
   }
 ]

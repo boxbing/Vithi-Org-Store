@@ -599,6 +599,63 @@ def generate_captcha_challenge():
     left = random.randint(1, 9)
     right = random.randint(1, 9)
     return f'What is {left} + {right}?', str(left + right)
+    
+def generate_image_captcha():
+    allowed = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    token = ''.join(random.choice(allowed) for _ in range(5))
+    lines = []
+    for _ in range(4):
+        x1 = random.randint(0, 220)
+        y1 = random.randint(8, 64)
+        x2 = random.randint(0, 220)
+        y2 = random.randint(8, 64)
+        stroke = random.choice(['#3d7a42', '#7b5b3a', '#c7a24b', '#566a7f'])
+        lines.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{stroke}" stroke-width="2" opacity="0.6" />')
+    
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="260" height="80" viewBox="0 0 260 80">'
+        '<rect width="260" height="80" rx="12" fill="#f7f2e8" />'
+        f'{"".join(lines)}'
+        '<g font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" letter-spacing="5">'
+    )
+    
+    start_x = 28
+    for index, char in enumerate(token):
+        rotate = random.randint(-18, 18)
+        y = random.randint(42, 55)
+        fill = random.choice(['#204b2b', '#7b5b3a', '#0b2a16'])
+        x = start_x + index * 42
+        svg += f'<text x="{x}" y="{y}" transform="rotate({rotate} {x} {y})" fill="{fill}">{char}</text>'
+    svg += '</g></svg>'
+    
+    return 'data:image/svg+xml;charset=UTF-8,' + quote(svg), token
+
+
+def generate_image_captcha():
+    allowed = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    token = ''.join(random.choice(allowed) for _ in range(5))
+    lines = []
+    for _ in range(4):
+        x1 = random.randint(0, 220)
+        y1 = random.randint(8, 64)
+        x2 = random.randint(0, 220)
+        y2 = random.randint(8, 64)
+        stroke = random.choice(['#3d7a42', '#7b5b3a', '#c7a24b', '#566a7f'])
+        lines.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{stroke}" stroke-width="2" opacity="0.6" />')
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="260" height="80" viewBox="0 0 260 80">'
+        '<rect width="260" height="80" rx="12" fill="#f7f2e8" />'
+        f'{"".join(lines)}'
+        '<g font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" letter-spacing="5">'
+    )
+    start_x = 28
+    for index, char in enumerate(token):
+        rotate = random.randint(-18, 18)
+        y = random.randint(42, 55)
+        fill = random.choice(['#204b2b', '#7b5b3a', '#0b2a16'])
+        svg += f'<text x="{start_x + index * 42}" y="{y}" transform="rotate({rotate} {start_x + index * 42} {y})" fill="{fill}">{char}</text>'
+    svg += '</g></svg>'
+    return 'data:image/svg+xml;charset=UTF-8,' + quote(svg), token
 
 
 def parse_post_form(handler):
@@ -872,7 +929,7 @@ def render_login(user, error=''):
 
 
 def render_register(user, error='', fullname='', email='', phone=''):
-    captcha_question, captcha_answer = generate_captcha_challenge()
+    captcha_image, captcha_expected = generate_image_captcha()
     return make_template(
         'register.html',
         title='Create Account',
@@ -880,8 +937,8 @@ def render_register(user, error='', fullname='', email='', phone=''):
         fullname=html.escape(fullname),
         email=html.escape(email),
         phone=html.escape(phone),
-        captcha_question=captcha_question,
-        captcha_expected=captcha_answer,
+        captcha_image=captcha_image,
+        captcha_expected=captcha_expected,
         **get_template_user_context(user)
     )
 
@@ -1238,7 +1295,7 @@ class VithiHandler(SimpleHTTPRequestHandler):
             description_html = data.get('descriptionHtml', [''])[0].strip()
             display_order_text = data.get('displayOrder', [''])[0].strip()
             status = data.get('status', ['online'])[0].strip().lower()
-            seo_slug = data.get('seoSlug', [''])[0].strip().lower()
+            seo_slug = ''
             meta_title = data.get('metaTitle', [''])[0].strip()
             meta_description = data.get('metaDescription', [''])[0].strip()
             meta_keywords = data.get('metaKeywords', [''])[0].strip()
@@ -1258,8 +1315,7 @@ class VithiHandler(SimpleHTTPRequestHandler):
                 return
             if status not in ('online', 'offline'):
                 status = 'online'
-            if not seo_slug:
-                seo_slug = slugify(name)
+            seo_slug = slugify(name)
 
             for item in categories:
                 if str(item.get('id')) != category_id and item.get('name', '').strip().lower() == name.lower():
@@ -1447,13 +1503,17 @@ class VithiHandler(SimpleHTTPRequestHandler):
             fullname = data.get('fullname', [''])[0].strip()
             email = data.get('email', [''])[0].strip()
             password = data.get('password', [''])[0]
+            confirm_password = data.get('confirm_password', [''])[0]
             phone = data.get('phone', [''])[0].strip()
             captcha_expected = data.get('captcha_expected', [''])[0].strip()
-            captcha_answer = data.get('captcha_answer', [''])[0].strip()
+            captcha_answer = data.get('captcha_answer', [''])[0].strip().upper()
             if not fullname or not email or not password:
                 self.respond_html(render_register(user, error='Please complete all required fields.', fullname=fullname, email=email, phone=phone))
                 return
-            if not captcha_expected or captcha_answer != captcha_expected:
+            if password != confirm_password:
+                self.respond_html(render_register(user, error='Password and confirm password do not match.', fullname=fullname, email=email, phone=phone))
+                return
+            if not captcha_expected or captcha_answer != captcha_expected.upper():
                 self.respond_html(render_register(user, error='Captcha verification failed. Please try again.', fullname=fullname, email=email, phone=phone))
                 return
             if email in users:

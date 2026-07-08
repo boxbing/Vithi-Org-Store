@@ -1139,6 +1139,19 @@ input {
   border-radius: 0.9rem;
 }
 
+.login-captcha-wrap {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.login-captcha-image {
+  width: 100%;
+  max-width: 260px;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(32, 75, 43, 0.16);
+  background: var(--cream);
+}
+
 .auth-form textarea {
   width: 100%;
   padding: 0.95rem 1rem;

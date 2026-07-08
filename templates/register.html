@@ -14,9 +14,14 @@
         <input id="phone" name="phone" type="tel" placeholder="+91 98765 43210" value="$phone" />
         <label for="password">Password</label>
         <input id="password" name="password" type="password" placeholder="Create a strong password" required />
-        <label for="captcha_answer">Captcha: $captcha_question</label>
-        <input id="captcha_answer" name="captcha_answer" type="text" placeholder="Enter the answer" required />
+        <label for="confirm_password">Confirm Password</label>
+        <input id="confirm_password" name="confirm_password" type="password" placeholder="Re-enter your password" required />
+        <label for="captcha_answer">Image Captcha</label>
         <input type="hidden" name="captcha_expected" value="$captcha_expected" />
+        <div class="login-captcha-wrap">
+          <img class="login-captcha-image" src="$captcha_image" alt="Registration captcha image" />
+          <input id="captcha_answer" name="captcha_answer" type="text" placeholder="Enter characters shown" autocomplete="off" required />
+        </div>
         <button type="submit" class="btn btn-primary auth-btn">Create Account</button>
       </form>
       <p class="switch-auth">Already have an account? <a href="/login">Sign in</a></p>
