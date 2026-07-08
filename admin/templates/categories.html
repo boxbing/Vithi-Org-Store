@@ -1,0 +1,132 @@
+<div class="admin-card">
+  <div class="admin-card-head">
+    <div>
+      <p class="admin-kicker">Catalog</p>
+      <h1>Category Management</h1>
+    </div>
+    <span class="admin-pill">Total: $category_count</span>
+  </div>
+
+  $form_message
+
+  <form class="admin-filter-row" method="get" action="/admin/categories">
+    <label>
+      Status
+      <select name="status">
+        <option value="all" $filter_all_selected>All</option>
+        <option value="online" $filter_online_selected>Online</option>
+        <option value="offline" $filter_offline_selected>Offline</option>
+      </select>
+    </label>
+    <label>
+      Sort
+      <select name="sort">
+        <option value="display_order" $sort_display_selected>Display Order</option>
+        <option value="name" $sort_name_selected>Category Name</option>
+        <option value="created_date" $sort_created_selected>Creation Date</option>
+      </select>
+    </label>
+    <button type="submit" class="admin-btn">Apply</button>
+  </form>
+
+  <form class="admin-form-grid" method="post" action="/admin/categories/save" enctype="multipart/form-data">
+    $edit_hidden_id
+    <div>
+      <label>Category ID (Read Only)</label>
+      <input type="text" value="$form_id" readonly />
+    </div>
+    <div>
+      <label>Category Name *</label>
+      <input type="text" name="name" value="$form_name" required />
+    </div>
+    <div class="admin-span-2">
+      <label>Category Description (HTML)</label>
+      <textarea name="descriptionHtml" rows="4" placeholder="Enter rich text/HTML description">$form_description</textarea>
+    </div>
+    <div>
+      <label>Display Order *</label>
+      <input type="number" name="displayOrder" min="1" value="$form_display_order" required />
+    </div>
+    <div>
+      <label>Category Status</label>
+      <select name="status">
+        <option value="online" $status_online_selected>Online</option>
+        <option value="offline" $status_offline_selected>Offline</option>
+      </select>
+    </div>
+    <div class="admin-span-2">
+      <label>Category Image *</label>
+      <input type="file" name="image" accept="image/*" />
+      <input type="text" name="imagePath" value="$form_image_path" readonly />
+      <div class="admin-preview">$image_preview_block</div>
+    </div>
+
+    <div class="admin-divider admin-span-2"></div>
+
+    <div>
+      <label>SEO URL (Slug) *</label>
+      <input type="text" name="seoSlug" value="$form_slug" required />
+    </div>
+    <div>
+      <label>Meta Title</label>
+      <input type="text" name="metaTitle" value="$form_meta_title" />
+    </div>
+    <div class="admin-span-2">
+      <label>Meta Description</label>
+      <textarea name="metaDescription" rows="2" maxlength="160">$form_meta_description</textarea>
+    </div>
+    <div>
+      <label>Meta Keywords</label>
+      <input type="text" name="metaKeywords" value="$form_meta_keywords" placeholder="keyword1, keyword2" />
+    </div>
+    <div>
+      <label>Canonical URL</label>
+      <input type="text" name="canonicalUrl" value="$form_canonical_url" />
+    </div>
+
+    <div class="admin-divider admin-span-2"></div>
+
+    <div>
+      <label>Created Date & Time (Read Only)</label>
+      <input type="text" value="$form_created_at" readonly />
+    </div>
+    <div>
+      <label>Last Modified Date & Time (Read Only)</label>
+      <input type="text" value="$form_modified_at" readonly />
+    </div>
+    <div>
+      <label>Created By (Read Only)</label>
+      <input type="text" value="$form_created_by" readonly />
+    </div>
+    <div>
+      <label>Modified By (Read Only)</label>
+      <input type="text" value="$form_modified_by" readonly />
+    </div>
+
+    <div class="admin-actions-row admin-span-2">
+      <button type="submit" class="admin-btn">Save Category</button>
+      <a href="/admin/categories" class="admin-btn admin-btn-secondary">Reset</a>
+    </div>
+  </form>
+
+  <div class="admin-table-wrap">
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>SEO Slug</th>
+          <th>Display Order</th>
+          <th>Status</th>
+          <th>Image</th>
+          <th>Created</th>
+          <th>Modified</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        $category_rows
+      </tbody>
+    </table>
+  </div>
+</div>

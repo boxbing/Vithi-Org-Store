@@ -451,7 +451,7 @@ input {
 }
 
 .slide:nth-child(1) {
-  background-image: url("https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=1600&q=80");
+  background-image: url("/assets/images/vithi_Home_Page_Banner.png");
 }
 
 .slide:nth-child(2) {

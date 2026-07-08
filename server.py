@@ -5,11 +5,12 @@ import json
 import html
 import hmac
 import hashlib
+import re
 from datetime import datetime
 from http import cookies
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from string import Template
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlparse, quote
 
 try:
     import psycopg
@@ -28,6 +29,8 @@ REVIEWS_FILE = os.path.join(DATA_STORE, 'reviews.json')
 LEGACY_SUBSCRIBERS_FILE = os.path.join(DATA_STORE, 'subscribers.json')
 SUBSCRIBERS_FILE = os.path.join(ADMIN_DATA_DIR, 'subscribers.json')
 ADMIN_AUTH_FILE = os.path.join(ADMIN_DATA_DIR, 'auth.json')
+CATEGORIES_FILE = os.path.join(ADMIN_DATA_DIR, 'categories.json')
+CATEGORY_IMAGE_DIR = os.path.join(DATA_DIR, 'assets', 'category-images')
 DATABASE_URL = os.environ.get('DATABASE_URL') or os.environ.get('POSTGRES_URL') or 'postgresql://postgres:postgres@localhost:5432/vithi'
 ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
@@ -42,6 +45,7 @@ users = {}
 orders = []
 reviews = []
 subscribers = []
+categories = []
 admin_auth = {'username': ADMIN_USERNAME, 'password_hash': ''}
 db_connection = None
 db_ready = False
@@ -52,6 +56,7 @@ def ensure_data_dir():
         os.makedirs(DATA_STORE, exist_ok=True)
         os.makedirs(ADMIN_DATA_DIR, exist_ok=True)
         os.makedirs(ADMIN_TEMPLATE_DIR, exist_ok=True)
+        os.makedirs(CATEGORY_IMAGE_DIR, exist_ok=True)
     except Exception:
         pass
 
@@ -413,6 +418,7 @@ initialize_admin_auth()
 products = [
     {
         'id': 1,
+        'categoryId': 1,
         'name': 'Organic Turmeric Powder',
         'price': 249,
         'weightKg': 1.0,
@@ -421,6 +427,7 @@ products = [
     },
     {
         'id': 2,
+        'categoryId': 2,
         'name': 'Botanical Face Serum',
         'price': 599,
         'weightKg': 1.0,
@@ -429,6 +436,7 @@ products = [
     },
     {
         'id': 3,
+        'categoryId': 3,
         'name': 'Wildflower Organic Honey',
         'price': 399,
         'weightKg': 1.0,
@@ -436,6 +444,100 @@ products = [
         'image': 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=900&q=80'
     }
 ]
+
+
+def slugify(value):
+    slug = re.sub(r'[^a-zA-Z0-9]+', '-', value.strip().lower()).strip('-')
+    return slug or 'category'
+
+
+def initialize_categories():
+    global categories
+    ensure_data_dir()
+    stored = load_json_file(CATEGORIES_FILE, [])
+    if isinstance(stored, list) and stored:
+        categories = stored
+        return
+
+    now = datetime.now().isoformat(timespec='seconds')
+    default_admin = admin_auth.get('username', ADMIN_USERNAME)
+    categories = [
+        {
+            'id': 1,
+            'name': 'Organic Spices',
+            'descriptionHtml': '<p>Pure and traditional spice blends for daily wellness.</p>',
+            'displayOrder': 1,
+            'imagePath': '/assets/category-images/organic-spices.png',
+            'createdAt': now,
+            'modifiedAt': now,
+            'createdBy': default_admin,
+            'modifiedBy': default_admin,
+            'status': 'online',
+            'seoSlug': 'organic-spices',
+            'metaTitle': 'Organic Spices',
+            'metaDescription': 'Discover naturally sourced organic spices for healthy cooking.',
+            'metaKeywords': 'organic spices, turmeric, natural masala',
+            'canonicalUrl': ''
+        },
+        {
+            'id': 2,
+            'name': 'Natural Skin Care',
+            'descriptionHtml': '<p>Botanical care products for clean and radiant skin.</p>',
+            'displayOrder': 2,
+            'imagePath': '/assets/category-images/natural-skin-care.png',
+            'createdAt': now,
+            'modifiedAt': now,
+            'createdBy': default_admin,
+            'modifiedBy': default_admin,
+            'status': 'online',
+            'seoSlug': 'natural-skin-care',
+            'metaTitle': 'Natural Skin Care',
+            'metaDescription': 'Explore botanical skin care made from natural ingredients.',
+            'metaKeywords': 'skin care, botanical serum, natural beauty',
+            'canonicalUrl': ''
+        },
+        {
+            'id': 3,
+            'name': 'Organic Sweeteners',
+            'descriptionHtml': '<p>Healthy sweet alternatives with authentic taste.</p>',
+            'displayOrder': 3,
+            'imagePath': '/assets/category-images/organic-sweeteners.png',
+            'createdAt': now,
+            'modifiedAt': now,
+            'createdBy': default_admin,
+            'modifiedBy': default_admin,
+            'status': 'online',
+            'seoSlug': 'organic-sweeteners',
+            'metaTitle': 'Organic Sweeteners',
+            'metaDescription': 'Choose healthier natural sweeteners for your family.',
+            'metaKeywords': 'organic honey, sweetener, healthy sugar alternative',
+            'canonicalUrl': ''
+        }
+    ]
+    save_json_file(CATEGORIES_FILE, categories)
+
+
+def next_category_id():
+    if not categories:
+        return 1
+    return max(int(item.get('id', 0)) for item in categories) + 1
+
+
+def get_category_by_id(category_id):
+    for category in categories:
+        if str(category.get('id')) == str(category_id):
+            return category
+    return None
+
+
+def has_products_for_category(category_id):
+    for product in products:
+        if str(product.get('categoryId')) == str(category_id):
+            return True
+    return False
+
+
+initialize_categories()
 
 
 def load_template(name):
@@ -497,6 +599,58 @@ def generate_captcha_challenge():
     left = random.randint(1, 9)
     right = random.randint(1, 9)
     return f'What is {left} + {right}?', str(left + right)
+
+
+def parse_post_form(handler):
+    content_type = handler.headers.get('Content-Type', '')
+    length = int(handler.headers.get('Content-Length', 0))
+    raw_body = handler.rfile.read(length)
+
+    if not content_type.startswith('multipart/form-data'):
+        return parse_qs(raw_body.decode('utf-8')), {}
+
+    boundary_match = re.search(r'boundary=([^;]+)', content_type)
+    if not boundary_match:
+        return {}, {}
+    boundary = boundary_match.group(1).strip().strip('"').encode('utf-8')
+
+    data = {}
+    files = {}
+    marker = b'--' + boundary
+    for part in raw_body.split(marker):
+        part = part.strip()
+        if not part or part == b'--':
+            continue
+
+        head, sep, content = part.partition(b'\r\n\r\n')
+        if not sep:
+            continue
+
+        content = content.rstrip(b'\r\n')
+        headers = head.decode('utf-8', errors='ignore').split('\r\n')
+        disposition = ''
+        for header_line in headers:
+            if header_line.lower().startswith('content-disposition:'):
+                disposition = header_line
+                break
+        if not disposition:
+            continue
+
+        name_match = re.search(r'name="([^"]+)"', disposition)
+        if not name_match:
+            continue
+        field_name = name_match.group(1)
+
+        filename_match = re.search(r'filename="([^"]*)"', disposition)
+        if filename_match:
+            files[field_name] = {
+                'filename': filename_match.group(1),
+                'content': content,
+            }
+        else:
+            data[field_name] = [content.decode('utf-8', errors='ignore')]
+
+    return data, files
 
 
 def get_template_user_context(user):
@@ -788,6 +942,7 @@ def render_admin_template(name, **context):
             '<aside class="admin-sidebar">'
             '<a class="admin-brand" href="/admin/subscribers">Vithi Admin</a>'
             '<nav class="admin-nav">'
+            '<a href="/admin/categories">Categories</a>'
             '<a href="/admin/subscribers">Subscribers</a>'
             '<a href="/" target="_blank" rel="noopener noreferrer">Open Storefront</a>'
             '</nav>'
@@ -837,6 +992,116 @@ def render_admin_subscribers(admin_user):
         admin_user=admin_user,
         subscriber_count=str(len(subscribers)),
         subscriber_rows=rows
+    )
+
+
+def render_admin_categories(admin_user, query):
+    status_filter = query.get('status', ['all'])[0].strip().lower() or 'all'
+    sort_by = query.get('sort', ['display_order'])[0].strip().lower() or 'display_order'
+    edit_id = query.get('edit', [''])[0].strip()
+    message = query.get('msg', [''])[0]
+    error = query.get('error', [''])[0]
+
+    visible = categories[:]
+    if status_filter in ('online', 'offline'):
+        visible = [item for item in visible if item.get('status', 'online') == status_filter]
+
+    if sort_by == 'name':
+        visible.sort(key=lambda item: item.get('name', '').lower())
+    elif sort_by == 'created_date':
+        visible.sort(key=lambda item: item.get('createdAt', ''), reverse=True)
+    else:
+        visible.sort(key=lambda item: int(item.get('displayOrder', 999999)))
+
+    rows = []
+    for item in visible:
+        category_id = str(item.get('id', ''))
+        name = html.escape(str(item.get('name', '')))
+        slug = html.escape(str(item.get('seoSlug', '')))
+        status = item.get('status', 'online')
+        status_label = 'Online' if status == 'online' else 'Offline'
+        status_class = 'admin-status-online' if status == 'online' else 'admin-status-offline'
+        image_path = html.escape(str(item.get('imagePath', '')))
+        display_order = html.escape(str(item.get('displayOrder', '')))
+        created_at = html.escape(str(item.get('createdAt', '')))
+        modified_at = html.escape(str(item.get('modifiedAt', '')))
+        created_by = html.escape(str(item.get('createdBy', '')))
+        modified_by = html.escape(str(item.get('modifiedBy', '')))
+
+        rows.append(
+            f'<tr>'
+            f'<td>{category_id}</td>'
+            f'<td>{name}</td>'
+            f'<td>{slug}</td>'
+            f'<td>{display_order}</td>'
+            f'<td><span class="admin-status-chip {status_class}">{status_label}</span></td>'
+            f'<td><code>{image_path}</code></td>'
+            f'<td>{created_at}<br/><small>by {created_by}</small></td>'
+            f'<td>{modified_at}<br/><small>by {modified_by}</small></td>'
+            f'<td class="admin-actions">'
+            f'<a class="admin-link-btn" href="/admin/categories?edit={category_id}&status={status_filter}&sort={sort_by}">Edit</a>'
+            f'<form method="post" action="/admin/categories/toggle" style="display:inline;">'
+            f'<input type="hidden" name="id" value="{category_id}" />'
+            f'<input type="hidden" name="status" value="{"offline" if status == "online" else "online"}" />'
+            f'<button type="submit" class="admin-link-btn">{"Set Offline" if status == "online" else "Set Online"}</button>'
+            f'</form>'
+            f'<form method="post" action="/admin/categories/delete" style="display:inline;" onsubmit="return confirm(\'Are you sure you want to delete this category?\')">'
+            f'<input type="hidden" name="id" value="{category_id}" />'
+            f'<button type="submit" class="admin-link-btn admin-link-danger">Delete</button>'
+            f'</form>'
+            f'</td>'
+            f'</tr>'
+        )
+
+    category_rows = ''.join(rows) if rows else '<tr><td colspan="9">No categories found.</td></tr>'
+
+    if edit_id:
+        selected = get_category_by_id(edit_id)
+        if selected is None:
+            edit_id = ''
+            selected = {}
+    else:
+        selected = {}
+
+    form_status = selected.get('status', 'online')
+    form_image = str(selected.get('imagePath', ''))
+    form_message = ''
+    if message:
+        form_message = f'<p class="admin-success">{html.escape(message)}</p>'
+    elif error:
+        form_message = f'<p class="admin-error">{html.escape(error)}</p>'
+
+    return render_admin_template(
+        'categories.html',
+        title='Category Management',
+        admin_user=admin_user,
+        category_rows=category_rows,
+        category_count=str(len(categories)),
+        form_message=form_message,
+        form_id=str(selected.get('id', 'Auto-generated')),
+        form_name=html.escape(str(selected.get('name', ''))),
+        form_description=html.escape(str(selected.get('descriptionHtml', ''))),
+        form_display_order=html.escape(str(selected.get('displayOrder', '1'))),
+        form_image_path=html.escape(form_image),
+        form_created_at=html.escape(str(selected.get('createdAt', '-'))),
+        form_modified_at=html.escape(str(selected.get('modifiedAt', '-'))),
+        form_created_by=html.escape(str(selected.get('createdBy', '-'))),
+        form_modified_by=html.escape(str(selected.get('modifiedBy', '-'))),
+        form_slug=html.escape(str(selected.get('seoSlug', ''))),
+        form_meta_title=html.escape(str(selected.get('metaTitle', ''))),
+        form_meta_description=html.escape(str(selected.get('metaDescription', ''))),
+        form_meta_keywords=html.escape(str(selected.get('metaKeywords', ''))),
+        form_canonical_url=html.escape(str(selected.get('canonicalUrl', ''))),
+        status_online_selected='selected' if form_status == 'online' else '',
+        status_offline_selected='selected' if form_status == 'offline' else '',
+        edit_hidden_id=f'<input type="hidden" name="id" value="{selected.get("id", "")}" />' if selected else '',
+        sort_display_selected='selected' if sort_by == 'display_order' else '',
+        sort_name_selected='selected' if sort_by == 'name' else '',
+        sort_created_selected='selected' if sort_by == 'created_date' else '',
+        filter_all_selected='selected' if status_filter == 'all' else '',
+        filter_online_selected='selected' if status_filter == 'online' else '',
+        filter_offline_selected='selected' if status_filter == 'offline' else '',
+        image_preview_block=f'<img src="{html.escape(form_image)}" alt="Category image preview" class="admin-image-preview" />' if form_image else '<p class="admin-helper">No image uploaded yet.</p>'
     )
 
 
@@ -908,6 +1173,12 @@ class VithiHandler(SimpleHTTPRequestHandler):
                 return
             self.respond_html(render_admin_subscribers(admin_user))
             return
+        if path == '/admin/categories':
+            if not admin_user:
+                self.redirect('/admin/login')
+                return
+            self.respond_html(render_admin_categories(admin_user, parse_qs(parsed.query)))
+            return
         if path == '/cart':
             self.respond_html(render_cart(user, get_cart_items(self.headers.get('Cookie'))))
             return
@@ -928,10 +1199,9 @@ class VithiHandler(SimpleHTTPRequestHandler):
     def do_POST(self):
         parsed = urlparse(self.path)
         path = parsed.path
-        length = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(length).decode('utf-8')
-        data = parse_qs(body)
+        data, files = parse_post_form(self)
         user = get_user_from_cookie(self.headers.get('Cookie'))
+        admin_user = get_admin_from_cookie(self.headers.get('Cookie'))
 
         if path == '/admin/login':
             username = data.get('username', [''])[0].strip()
@@ -956,6 +1226,141 @@ class VithiHandler(SimpleHTTPRequestHandler):
                 self.end_headers()
                 return
             self.respond_admin_login_with_csrf(error='Invalid admin credentials.')
+            return
+
+        if path == '/admin/categories/save':
+            if not admin_user:
+                self.redirect('/admin/login')
+                return
+
+            category_id = data.get('id', [''])[0].strip()
+            name = data.get('name', [''])[0].strip()
+            description_html = data.get('descriptionHtml', [''])[0].strip()
+            display_order_text = data.get('displayOrder', [''])[0].strip()
+            status = data.get('status', ['online'])[0].strip().lower()
+            seo_slug = data.get('seoSlug', [''])[0].strip().lower()
+            meta_title = data.get('metaTitle', [''])[0].strip()
+            meta_description = data.get('metaDescription', [''])[0].strip()
+            meta_keywords = data.get('metaKeywords', [''])[0].strip()
+            canonical_url = data.get('canonicalUrl', [''])[0].strip()
+            image_path = data.get('imagePath', [''])[0].strip()
+
+            try:
+                display_order = int(display_order_text)
+            except ValueError:
+                display_order = 0
+
+            if not name:
+                self.redirect('/admin/categories?error=Category+Name+is+mandatory.')
+                return
+            if display_order < 1:
+                self.redirect('/admin/categories?error=Display+Order+must+be+a+positive+integer.')
+                return
+            if status not in ('online', 'offline'):
+                status = 'online'
+            if not seo_slug:
+                seo_slug = slugify(name)
+
+            for item in categories:
+                if str(item.get('id')) != category_id and item.get('name', '').strip().lower() == name.lower():
+                    self.redirect('/admin/categories?error=Category+Name+must+be+unique.')
+                    return
+                if str(item.get('id')) != category_id and item.get('seoSlug', '').strip().lower() == seo_slug.lower():
+                    self.redirect('/admin/categories?error=SEO+URL+slug+must+be+unique.')
+                    return
+
+            uploaded = files.get('image')
+            if uploaded and uploaded.get('filename'):
+                _, ext = os.path.splitext(uploaded['filename'])
+                safe_name = f'{slugify(name)}-{int(datetime.now().timestamp())}{ext.lower() or ".png"}'
+                target_path = os.path.join(CATEGORY_IMAGE_DIR, safe_name)
+                with open(target_path, 'wb') as out:
+                    out.write(uploaded.get('content', b''))
+                image_path = f'/assets/category-images/{safe_name}'
+
+            if not image_path:
+                self.redirect('/admin/categories?error=Category+Image+is+mandatory.')
+                return
+
+            now = datetime.now().isoformat(timespec='seconds')
+            actor = admin_user
+            if category_id:
+                category = get_category_by_id(category_id)
+                if not category:
+                    self.redirect('/admin/categories?error=Category+not+found.')
+                    return
+                category.update({
+                    'name': name,
+                    'descriptionHtml': description_html,
+                    'displayOrder': display_order,
+                    'imagePath': image_path,
+                    'modifiedAt': now,
+                    'modifiedBy': actor,
+                    'status': status,
+                    'seoSlug': seo_slug,
+                    'metaTitle': meta_title,
+                    'metaDescription': meta_description,
+                    'metaKeywords': meta_keywords,
+                    'canonicalUrl': canonical_url,
+                })
+                save_json_file(CATEGORIES_FILE, categories)
+                self.redirect(f'/admin/categories?edit={category_id}&msg={quote("Category updated successfully.")}')
+                return
+
+            new_id = next_category_id()
+            categories.append({
+                'id': new_id,
+                'name': name,
+                'descriptionHtml': description_html,
+                'displayOrder': display_order,
+                'imagePath': image_path,
+                'createdAt': now,
+                'modifiedAt': now,
+                'createdBy': actor,
+                'modifiedBy': actor,
+                'status': status or 'online',
+                'seoSlug': seo_slug,
+                'metaTitle': meta_title,
+                'metaDescription': meta_description,
+                'metaKeywords': meta_keywords,
+                'canonicalUrl': canonical_url,
+            })
+            save_json_file(CATEGORIES_FILE, categories)
+            self.redirect(f'/admin/categories?edit={new_id}&msg={quote("Category created successfully.")}')
+            return
+
+        if path == '/admin/categories/toggle':
+            if not admin_user:
+                self.redirect('/admin/login')
+                return
+            category_id = data.get('id', [''])[0].strip()
+            next_status = data.get('status', ['online'])[0].strip().lower()
+            category = get_category_by_id(category_id)
+            if not category:
+                self.redirect('/admin/categories?error=Category+not+found.')
+                return
+            category['status'] = 'online' if next_status == 'online' else 'offline'
+            category['modifiedAt'] = datetime.now().isoformat(timespec='seconds')
+            category['modifiedBy'] = admin_user
+            save_json_file(CATEGORIES_FILE, categories)
+            self.redirect('/admin/categories?msg=Category+status+updated.')
+            return
+
+        if path == '/admin/categories/delete':
+            if not admin_user:
+                self.redirect('/admin/login')
+                return
+            category_id = data.get('id', [''])[0].strip()
+            category = get_category_by_id(category_id)
+            if not category:
+                self.redirect('/admin/categories?error=Category+not+found.')
+                return
+            if has_products_for_category(category_id):
+                self.redirect('/admin/categories?error=This+category+cannot+be+deleted+because+it+contains+one+or+more+products.+Please+move+or+delete+the+associated+products+before+deleting+the+category.')
+                return
+            categories[:] = [item for item in categories if str(item.get('id')) != category_id]
+            save_json_file(CATEGORIES_FILE, categories)
+            self.redirect('/admin/categories?msg=Category+deleted+successfully.')
             return
 
         if path == '/cart/add':
