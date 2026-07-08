@@ -80,6 +80,17 @@ def verify_password_hash(password, encoded):
     return hmac.compare_digest(actual, expected)
 
 
+def is_password_hash(value):
+    return str(value).startswith('pbkdf2_sha256$')
+
+
+def verify_user_password(password, stored_value):
+    stored_text = str(stored_value or '')
+    if is_password_hash(stored_text):
+        return verify_password_hash(password, stored_text)
+    return hmac.compare_digest(password, stored_text)
+
+
 def initialize_admin_auth():
     global admin_auth
     ensure_data_dir()
@@ -1731,7 +1742,14 @@ class VithiHandler(SimpleHTTPRequestHandler):
             email = data.get('email', [''])[0].strip()
             password = data.get('password', [''])[0]
             user_record = users.get(email)
-            if user_record and user_record['password'] == password:
+            if user_record and verify_user_password(password, user_record.get('password', '')):
+                if not is_password_hash(user_record.get('password', '')):
+                    user_record['password'] = make_password_hash(password)
+                    users[email] = user_record
+                    if db_ready:
+                        save_user_to_db(user_record)
+                    else:
+                        save_json_file(USERS_FILE, users)
                 session_id = generate_session_id()
                 sessions[session_id] = email
                 self.send_response(302)
@@ -1770,7 +1788,7 @@ class VithiHandler(SimpleHTTPRequestHandler):
                 'email': email,
                 'phone': phone,
                 'address': '',
-                'password': password
+                'password': make_password_hash(password)
             }
             if db_ready:
                 save_user_to_db(users[email])
