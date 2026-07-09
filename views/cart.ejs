@@ -1,42 +1,62 @@
 <%- include('partials/header') %>
 
 <main class="section container">
+  <% const itemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0); %>
   <div class="cart-page">
     <h1 style="margin-bottom: 1.2rem;">Shopping Cart</h1>
     <div class="cart-layout">
       <div class="cart-items">
         <div class="cart-header">
-          <p style="color: var(--muted); font-size: 0.95rem;">3 items in cart</p>
+          <p style="color: var(--muted); font-size: 0.95rem;"><%= itemCount %> item<%= itemCount === 1 ? '' : 's' %> in cart</p>
         </div>
 
-        <div class="cart-item">
-          <img src="https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=200&q=80" alt="Organic Turmeric Powder" />
-          <div class="item-details">
-            <h3>Organic Turmeric Powder</h3>
-            <p style="color: var(--muted); font-size: 0.9rem;">200g | ₹249</p>
+        <% if (cartItems.length === 0) { %>
+          <div class="empty-state">
+            <h3>Your cart is empty</h3>
+            <p>Add your favorite organic essentials to continue.</p>
+            <a class="btn btn-primary" href="/">Start Shopping</a>
           </div>
-          <div class="item-qty">
-            <button class="qty-btn">−</button>
-            <input type="number" value="2" readonly />
-            <button class="qty-btn">+</button>
-          </div>
-          <strong>₹498</strong>
-          <button class="remove-btn">✕</button>
-        </div>
+        <% } else { %>
+          <% cartItems.forEach((item) => { %>
+            <article class="cart-item">
+              <img src="<%= item.product.image %>" alt="<%= item.product.name %>" />
+              <div class="item-details">
+                <h3><%= item.product.name %></h3>
+                <p style="color: var(--muted); font-size: 0.9rem;"><%= item.product.category %> | ₹<%= item.product.price %></p>
+              </div>
+              <div class="item-qty">
+                <form method="POST" action="/cart/update" class="inline-form">
+                  <input type="hidden" name="productId" value="<%= item.productId %>" />
+                  <input type="hidden" name="quantity" value="<%= Math.max(item.quantity - 1, 0) %>" />
+                  <button class="qty-btn" type="submit" aria-label="Decrease quantity for <%= item.product.name %>">−</button>
+                </form>
+                <input type="number" value="<%= item.quantity %>" readonly />
+                <form method="POST" action="/cart/update" class="inline-form">
+                  <input type="hidden" name="productId" value="<%= item.productId %>" />
+                  <input type="hidden" name="quantity" value="<%= item.quantity + 1 %>" />
+                  <button class="qty-btn" type="submit" aria-label="Increase quantity for <%= item.product.name %>">+</button>
+                </form>
+              </div>
+              <strong>₹<%= item.lineTotal %></strong>
+              <form method="POST" action="/cart/remove" class="inline-form">
+                <input type="hidden" name="productId" value="<%= item.productId %>" />
+                <button class="remove-btn" type="submit" aria-label="Remove <%= item.product.name %> from cart">✕</button>
+              </form>
+            </article>
+          <% }) %>
+        <% } %>
       </div>
 
       <aside class="cart-summary">
         <div class="summary-card">
           <h2>Order Summary</h2>
-          <div class="summary-row"><span>Subtotal</span><strong>₹1,496</strong></div>
+          <div class="summary-row"><span>Subtotal</span><strong>₹<%= summary.subtotal %></strong></div>
           <div class="summary-row"><span>Shipping</span><strong>Free</strong></div>
-          <div class="summary-row"><span>Tax</span><strong>₹180</strong></div>
+          <div class="summary-row"><span>Tax</span><strong>₹<%= summary.tax %></strong></div>
           <div class="summary-divider"></div>
-          <div class="summary-row" style="font-size: 1.1rem;"><strong>Total</strong><strong style="color: var(--green-900);">₹1,676</strong></div>
+          <div class="summary-row" style="font-size: 1.1rem;"><strong>Total</strong><strong style="color: var(--green-900);">₹<%= summary.total %></strong></div>
           <form method="POST" action="/orders">
-            <input type="hidden" name="productName" value="Organic Turmeric Powder" />
-            <input type="hidden" name="total" value="1676" />
-            <button class="btn btn-primary" style="width: 100%; margin-top: 1.2rem;">Proceed to Payment</button>
+            <button class="btn btn-primary" style="width: 100%; margin-top: 1.2rem;" <%= cartItems.length === 0 ? 'disabled' : '' %>>Proceed to Payment</button>
           </form>
           <a href="/" class="btn btn-secondary" style="width: 100%; display: block; text-align: center; margin-top: 0.6rem;">Continue Shopping</a>
         </div>

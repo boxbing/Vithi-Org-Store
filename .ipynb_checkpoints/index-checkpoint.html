@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Vithi Organics Store offers 100% organic, natural, ayurvedic, chemical-free and pesticide-free wellness products."
+    />
+    <title>Vithi Organics Store | Pure by Nature</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="#">
+          <img
+            class="brand-logo"
+            src="https://vithiorg.com/templates/default/images/VithiOrg_Logo.png"
+            alt="Vithi Organics Store logo"
+          />
+        </a>
+        <div class="logo-popup" aria-hidden="true">
+          <img src="https://vithiorg.com/templates/default/images/VithiOrg_Logo.png" alt="Vithi Organics logo large" />
+        </div>
+        <div class="mobile-search">
+          <button class="mobile-search-toggle" aria-label="Open search">🔍</button>
+          <form class="mobile-search-form" role="search" onsubmit="event.preventDefault();">
+            <input class="mobile-search-input" type="search" placeholder="Search products" aria-label="Search products" />
+            <button type="button" class="mobile-search-close" aria-label="Close search">✕</button>
+          </form>
+        </div>
+        <button class="menu-toggle" aria-label="Toggle navigation" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+        <nav class="main-nav" aria-label="Primary navigation">
+          <a href="#home">Home</a>
+          <a href="#categories">Categories</a>
+          <a href="#best-sellers">Shop</a>
+          <a href="#about">About</a>
+          <a href="#contact">Contact</a>
+        </nav>
+        <div class="header-actions">
+          <form class="search-box" role="search">
+            <input type="search" placeholder="Search products" aria-label="Search products" />
+            <button type="submit" aria-label="Search">⌕</button>
+          </form>
+          <a href="login.html" class="icon-link">Login</a>
+          <a href="wishlist.html" class="icon-link">Wishlist</a>
+          <a href="cart.html" class="icon-link">Cart</a>
+        </div>
+      </div>
+    </header>
+
+    <main id="home">
+      <section class="hero">
+        <div class="hero-slider" aria-label="Featured banners">
+          <article class="slide active">
+            <div class="overlay"></div>
+            <div class="container slide-content">
+              <p class="eyebrow">Certified Organic Essentials</p>
+              <h1>Pure by Nature, Better for You</h1>
+              <p>Discover holistic wellness with herbs, oils, grains, and family-friendly nutrition.</p>
+              <div class="hero-actions">
+                <a class="btn btn-primary" href="#best-sellers">Shop Now</a>
+                <a class="btn btn-secondary" href="#categories">Explore Categories</a>
+              </div>
+            </div>
+          </article>
+          <article class="slide">
+            <div class="overlay"></div>
+            <div class="container slide-content">
+              <p class="eyebrow">Ayurvedic Rituals</p>
+              <h1>Trusted Care Rooted in Ayurveda</h1>
+              <p>Gentle nourishment crafted without harsh chemicals or artificial additives.</p>
+              <div class="hero-actions">
+                <a class="btn btn-primary" href="#featured">Discover Premium</a>
+                <a class="btn btn-secondary" href="#reviews">Read Reviews</a>
+              </div>
+            </div>
+          </article>
+          <article class="slide">
+            <div class="overlay"></div>
+            <div class="container slide-content">
+              <p class="eyebrow">Healthy Living Starts Here</p>
+              <h1>Fresh Choices for Modern Families</h1>
+              <p>From pantry staples to skincare, bring nature home with every purchase.</p>
+              <div class="hero-actions">
+                <a class="btn btn-primary" href="#categories">Browse Collections</a>
+                <a class="btn btn-secondary" href="#newsletter">Join Newsletter</a>
+              </div>
+            </div>
+          </article>
+        </div>
+        <div class="slider-dots" aria-label="Slide navigation"></div>
+      </section>
+
+      <section class="section container" id="categories">
+        <div class="section-heading">
+          <p class="eyebrow">Shop by Category</p>
+          <h2>Carefully Curated Organic Essentials</h2>
+        </div>
+        <div class="card-grid categories-grid">
+          <article class="card category-card">
+            <img src="https://images.unsplash.com/photo-1467453678174-768ec283a940?auto=format&fit=crop&w=900&q=80" alt="Fresh organic produce" />
+            <div class="card-body">
+              <h3>Organic Fruits & Vegetables</h3>
+              <p>Seasonal farm-fresh picks grown with natural methods and full traceability.</p>
+              <span>120+ products</span>
+            </div>
+          </article>
+          <article class="card category-card">
+            <img src="https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=80" alt="Herbal wellness products" />
+            <div class="card-body">
+              <h3>Ayurvedic Herbs</h3>
+              <p>Powerful herbs and natural remedies aligned with traditional wellness principles.</p>
+              <span>85+ products</span>
+            </div>
+          </article>
+          <article class="card category-card">
+            <img src="https://images.unsplash.com/photo-1471864190281-a93a3070b6de?auto=format&fit=crop&w=900&q=80" alt="Organic pantry staples" />
+            <div class="card-body">
+              <h3>Pantry Essentials</h3>
+              <p>Staples like grains, oils, pulses, and spices that bring wholesome flavor home.</p>
+              <span>200+ products</span>
+            </div>
+          </article>
+          <article class="card category-card">
+            <img src="https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&w=900&q=80" alt="Natural skincare products" />
+            <div class="card-body">
+              <h3>Skincare & Beauty</h3>
+              <p>Nourishing botanical skincare for radiant, healthy skin without compromise.</p>
+              <span>70+ products</span>
+            </div>
+          </article>
+          <article class="card category-card">
+            <img src="https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=900&q=80" alt="Organic baby care" />
+            <div class="card-body">
+              <h3>Baby & Kids</h3>
+              <p>Gentle wellness essentials made for little ones with purity and safety in mind.</p>
+              <span>45+ products</span>
+            </div>
+          </article>
+          <article class="card category-card">
+            <img src="https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?auto=format&fit=crop&w=900&q=80" alt="Organic herbal teas" />
+            <div class="card-body">
+              <h3>Wellness Drinks</h3>
+              <p>Refreshing teas, infusions, and blends for calm, balance, and everyday vitality.</p>
+              <span>60+ products</span>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section container" id="best-sellers">
+        <div class="section-heading flex-between">
+          <div>
+            <p class="eyebrow">Best Selling Products</p>
+            <h2>Customer Favorites</h2>
+          </div>
+          <a class="text-link" href="#">View All</a>
+        </div>
+        <div class="card-grid product-grid">
+          <article class="card product-card">
+            <a class="product-link" href="product.html"><img src="https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=900&q=80" alt="Organic turmeric powder" /></a>
+            <div class="card-body">
+              <div class="card-meta"><span>⭐ 4.9</span><span>Best Seller</span></div>
+              <h3><a href="product.html">Organic Turmeric Powder</a></h3>
+              <p>Pure, earthy spice with antioxidant-rich wellness benefits.</p>
+              <div class="price-row">
+                <strong>₹249</strong>
+                <div class="actions">
+                  <button>Add to Cart</button>
+                  <button class="ghost">♡</button>
+                </div>
+              </div>
+            </div>
+          </article>
+          <article class="card product-card">
+            <a class="product-link" href="product.html"><img src="https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=900&q=80" alt="Herbal face serum" /></a>
+            <div class="card-body">
+              <div class="card-meta"><span>⭐ 4.8</span><span>New</span></div>
+              <h3><a href="product.html">Botanical Face Serum</a></h3>
+              <p>Lightweight nourishment for calm, glowing, healthy skin.</p>
+              <div class="price-row">
+                <strong>₹599</strong>
+                <div class="actions">
+                  <button>Add to Cart</button>
+                  <button class="ghost">♡</button>
+                </div>
+              </div>
+            </div>
+          </article>
+          <article class="card product-card">
+            <a class="product-link" href="product.html"><img src="https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=900&q=80" alt="Organic honey jar" /></a>
+            <div class="card-body">
+              <div class="card-meta"><span>⭐ 4.7</span><span>Popular</span></div>
+              <h3><a href="product.html">Wildflower Organic Honey</a></h3>
+              <p>Pure sweetness with floral richness and natural goodness.</p>
+              <div class="price-row">
+                <strong>₹399</strong>
+                <div class="actions">
+                  <button>Add to Cart</button>
+                  <button class="ghost">♡</button>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section container" id="about">
+        <div class="section-heading">
+          <p class="eyebrow">Why Choose Vithi Organics</p>
+          <h2>Natural Wellness You Can Trust</h2>
+        </div>
+        <div class="features-grid">
+          <article class="feature-card">
+            <div class="icon">🌿</div>
+            <h3>100% Organic</h3>
+            <p>Formulated with certified organic ingredients and ethical sourcing.</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon">🧪</div>
+            <h3>No Chemicals</h3>
+            <p>Free from harmful additives, synthetic fillers, and artificial fragrances.</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon">🌱</div>
+            <h3>Pesticide Free</h3>
+            <p>Pure produce and products nurtured without toxic pesticide residue.</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon">✨</div>
+            <h3>Premium Quality</h3>
+            <p>Carefully tested for potency, purity, and fine craftsmanship.</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon">🔒</div>
+            <h3>Secure Payments</h3>
+            <p>Multiple trusted payment methods for safe and seamless checkout.</p>
+          </article>
+          <article class="feature-card">
+            <div class="icon">🚚</div>
+            <h3>Fast Delivery</h3>
+            <p>Quick dispatch and reliable doorstep delivery across the country.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section container" id="featured">
+        <div class="section-heading flex-between">
+          <div>
+            <p class="eyebrow">Featured Products</p>
+            <h2>Elevated Wellness Picks</h2>
+          </div>
+          <a class="text-link" href="#">Explore More</a>
+        </div>
+        <div class="featured-panel">
+          <div class="featured-copy">
+            <h3>Ayurvedic Immunity Booster</h3>
+            <p>Blend of tulsi, ginger, and spices crafted to support your daily routines with natural strength.</p>
+            <ul>
+              <li>100% plant-based ingredients</li>
+              <li>Supports daily nourishment</li>
+              <li>Free from preservatives</li>
+            </ul>
+            <a class="btn btn-primary" href="#">Buy Now</a>
+          </div>
+          <img src="https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1200&q=80" alt="Organic wellness tea blend" />
+        </div>
+      </section>
+
+      <section class="section container" id="reviews">
+        <div class="section-heading flex-between">
+          <div>
+            <p class="eyebrow">Customer Reviews</p>
+            <h2>What Families Love</h2>
+          </div>
+          <a class="text-link" href="#">View All Reviews</a>
+        </div>
+        <div class="card-grid review-grid">
+          <article class="card review-card">
+            <p>“The quality feels premium and the ingredients are genuinely natural. My family loves the honey and teas.”</p>
+            <strong>— Asha R.</strong>
+            <span>★★★★★</span>
+          </article>
+          <article class="card review-card">
+            <p>“Smooth ordering, beautiful packaging, and fast delivery. The skincare range is excellent.”</p>
+            <strong>— Neha P.</strong>
+            <span>★★★★★</span>
+          </article>
+          <article class="card review-card">
+            <p>“I trust Vithi Organics for everyday pantry staples and wellness essentials.”</p>
+            <strong>— Meera K.</strong>
+            <span>★★★★★</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="section lifestyle-section">
+        <div class="container lifestyle-card">
+          <div>
+            <p class="eyebrow">Organic Lifestyle</p>
+            <h2>Healthy habits, Ayurvedic wisdom, and mindful living.</h2>
+            <p>Choose wellness that respects your body, your home, and the planet.</p>
+            <a class="btn btn-primary" href="#">Learn More</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section container" id="videos">
+        <div class="section-heading">
+          <p class="eyebrow">Latest Videos</p>
+          <h2>Watch, Learn, and Shop Better</h2>
+        </div>
+        <div class="card-grid video-grid">
+          <article class="card video-card">
+            <img src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=900&q=80" alt="Healthy organic meal prep" />
+            <div class="card-body">
+              <h3>Organic Food Prep Tips</h3>
+              <p>Simple kitchen habits for fresh, nutrient-rich meals.</p>
+            </div>
+          </article>
+          <article class="card video-card">
+            <img src="https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=900&q=80" alt="Ayurvedic wellness routine" />
+            <div class="card-body">
+              <h3>Ayurvedic Daily Rituals</h3>
+              <p>Gentle practices to support balance and calm.</p>
+            </div>
+          </article>
+          <article class="card video-card">
+            <img src="https://images.unsplash.com/photo-1466637574441-749b8f19452f?auto=format&fit=crop&w=900&q=80" alt="Natural skincare tutorial" />
+            <div class="card-body">
+              <h3>Natural Skincare Routine</h3>
+              <p>How to build a wholesome skincare ritual at home.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section container" id="newsletter">
+        <div class="newsletter-card">
+          <div>
+            <p class="eyebrow">Stay Updated</p>
+            <h2>Join the Vithi Organics Circle</h2>
+            <p>Receive wellness tips, offers, and new arrivals in your inbox.</p>
+          </div>
+          <form class="newsletter-form">
+            <input type="email" placeholder="Enter your email" aria-label="Email address" />
+            <button type="submit">Subscribe</button>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer" id="contact">
+      <div class="container footer-grid">
+        <div>
+          <a class="brand footer-brand" href="#">
+            <img
+              class="brand-logo"
+              src="https://vithiorg.com/templates/default/images/VithiOrg_Logo.png"
+              alt="Vithi Organics Store logo"
+            />
+          </a>
+          <p>Pure, natural, and trustworthy wellness essentials for modern life.</p>
+        </div>
+        <div>
+          <h3>Categories</h3>
+          <a href="#">Fruits & Vegetables</a>
+          <a href="#">Herbs</a>
+          <a href="#">Pantry</a>
+          <a href="#">Skincare</a>
+        </div>
+        <div>
+          <h3>Support</h3>
+          <a href="#">Shipping & Returns</a>
+          <a href="#">Contact Us</a>
+          <a href="#">FAQs</a>
+          <a href="#">Track Order</a>
+        </div>
+        <div>
+          <h3>Contact</h3>
+          <p>info@vithiOrg.com</p>
+          <p>+91 986 844 3555</p>
+          <p>New Delhi, India</p>
+        </div>
+      </div>
+    </footer>
+
+    <script src="script.js"></script>
+  </body>
+</html>

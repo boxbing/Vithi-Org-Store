@@ -66,7 +66,14 @@
           <div class="price-row">
             <strong>₹<%= product.price %></strong>
             <div class="actions">
-              <a class="btn btn-primary" href="/cart">Buy</a>
+              <form method="POST" action="/cart/add">
+                <input type="hidden" name="productId" value="<%= product.id %>" />
+                <button class="btn btn-primary" type="submit">Add to Cart</button>
+              </form>
+              <form method="POST" action="/wishlist/add">
+                <input type="hidden" name="productId" value="<%= product.id %>" />
+                <button class="btn product-wishlist-btn wishlist-icon-btn" type="submit" aria-label="Add <%= product.name %> to wishlist">♥</button>
+              </form>
             </div>
           </div>
         </div>

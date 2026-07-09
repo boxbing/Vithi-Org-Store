@@ -1,6 +1,7 @@
 <%- include('partials/header') %>
 
 <main class="section container">
+  <% const wishlistCount = wishlistItems.length; %>
   <div class="wishlist-page">
     <section class="wishlist-hero">
       <div>
@@ -9,35 +10,56 @@
         <p>Curated essentials you’ve saved for later. Move them to your cart whenever you’re ready.</p>
       </div>
       <div class="wishlist-actions">
-        <a class="btn btn-primary" href="/cart">Add all to cart</a>
+        <% if (wishlistCount > 0) { %>
+          <form method="POST" action="/wishlist/add-all-to-cart" class="inline-form">
+            <button class="btn btn-primary" type="submit">Add all to cart</button>
+          </form>
+        <% } %>
       </div>
     </section>
 
     <div class="wishlist-grid">
       <div class="wishlist-items">
         <div class="wishlist-summary">
-          <strong>4 items saved</strong>
+          <strong><%= wishlistCount %> item<%= wishlistCount === 1 ? '' : 's' %> saved</strong>
         </div>
 
-        <article class="wishlist-item">
-          <img src="https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=900&q=80" alt="Organic Turmeric Powder" />
-          <div class="wishlist-item-body">
-            <div class="wishlist-item-top">
-              <div>
-                <h3>Organic Turmeric Powder</h3>
-                <p>Antioxidant-rich spice for daily wellness rituals.</p>
-              </div>
-              <span class="badge">Best Seller</span>
-            </div>
-            <div class="wishlist-item-meta">
-              <span>200g</span>
-              <strong>₹249</strong>
-            </div>
-            <div class="wishlist-item-actions">
-              <a class="btn btn-primary" href="/cart">Move to cart</a>
-            </div>
+        <% if (wishlistCount === 0) { %>
+          <div class="empty-state">
+            <h3>Your wishlist is empty</h3>
+            <p>Save products you love and revisit them whenever you want.</p>
+            <a class="btn btn-primary" href="/">Browse products</a>
           </div>
-        </article>
+        <% } else { %>
+          <% wishlistItems.forEach((item) => { %>
+            <article class="wishlist-item">
+              <img src="<%= item.image %>" alt="<%= item.name %>" />
+              <div class="wishlist-item-body">
+                <div class="wishlist-item-top">
+                  <div>
+                    <h3><%= item.name %></h3>
+                    <p><%= item.description %></p>
+                  </div>
+                  <span class="badge"><%= item.category %></span>
+                </div>
+                <div class="wishlist-item-meta">
+                  <span>Organic favorite</span>
+                  <strong>₹<%= item.price %></strong>
+                </div>
+                <div class="wishlist-item-actions">
+                  <form method="POST" action="/wishlist/move-to-cart" class="inline-form">
+                    <input type="hidden" name="productId" value="<%= item.id %>" />
+                    <button class="btn btn-primary" type="submit">Move to cart</button>
+                  </form>
+                  <form method="POST" action="/wishlist/remove" class="inline-form">
+                    <input type="hidden" name="productId" value="<%= item.id %>" />
+                    <button class="btn product-wishlist-btn" type="submit">Remove</button>
+                  </form>
+                </div>
+              </div>
+            </article>
+          <% }) %>
+        <% } %>
       </div>
 
       <aside class="wishlist-sidebar">

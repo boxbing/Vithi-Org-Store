@@ -19,9 +19,15 @@
       </div>
       <p style="color:var(--muted);margin-top:0.8rem;">Pure, ethically sourced organic essentials crafted for everyday wellness.</p>
 
-      <div style="margin-top:1rem;display:flex;gap:0.6rem;">
-        <a class="btn btn-primary" href="/cart">Buy Now</a>
-        <a class="btn btn-secondary" href="/wishlist">Add to Wishlist</a>
+      <div style="margin-top:1rem;display:flex;gap:0.6rem;flex-wrap:wrap;">
+        <form method="POST" action="/cart/add">
+          <input type="hidden" name="productId" value="<%= product.id %>" />
+          <button class="btn btn-primary" type="submit">Add to Cart</button>
+        </form>
+        <form method="POST" action="/wishlist/add">
+          <input type="hidden" name="productId" value="<%= product.id %>" />
+          <button class="btn btn-secondary" type="submit">Add to Wishlist</button>
+        </form>
       </div>
     </aside>
   </div>
