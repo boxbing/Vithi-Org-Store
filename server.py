@@ -50,6 +50,16 @@ admin_auth = {'username': ADMIN_USERNAME, 'password_hash': ''}
 db_connection = None
 db_ready = False
 
+# Phase 1 features (Python runtime source of truth):
+# - User authentication (register/login/logout) with session cookies
+# - Product browsing (home, category pages, product details)
+# - Home/category navbar search via query parameter q
+# - Cart and wishlist flows with session-backed storage
+# - Orders, user home, address updates, and product reviews
+# - Recently viewed products on home/category/product/user home pages
+# - Newsletter subscriptions and admin login/category management
+# - PostgreSQL persistence with JSON fallback
+
 
 def ensure_data_dir():
     try:
@@ -835,7 +845,19 @@ def render_recently_viewed_block(cookie_header):
 
 def render_index(user, cookie_header='', query=None):
     query = query or {}
-    product_cards = ''.join(build_product_card(item) for item in products)
+    search_query = query.get('q', [''])[0].strip()
+    filtered_products = products
+    if search_query:
+        token = search_query.lower()
+        filtered_products = [
+            item for item in products
+            if token in item.get('name', '').lower() or token in item.get('description', '').lower()
+        ]
+
+    if filtered_products:
+        product_cards = ''.join(build_product_card(item) for item in filtered_products)
+    else:
+        product_cards = '<article class="card category-empty-card"><div class="card-body"><h3>No products found</h3><p>Try a different search term from the navbar search.</p></div></article>'
 
     category_cards = []
     for category in get_online_categories():
@@ -856,9 +878,13 @@ def render_index(user, cookie_header='', query=None):
 
     status = query.get('status', [''])[0].strip().lower()
     requested_category = query.get('category', [''])[0].strip()
-    category_status_block = ''
+    status_messages = []
     if status == 'notfound' and requested_category:
-        category_status_block = '<p class="error-message">Requested category is unavailable right now. Please choose another category.</p>'
+        status_messages.append('<p class="error-message">Requested category is unavailable right now. Please choose another category.</p>')
+    if search_query:
+        status_messages.append(f'<p class="status-message">Showing {len(filtered_products)} result(s) for "{html.escape(search_query)}".</p>')
+
+    category_status_block = ''.join(status_messages)
 
     return make_template(
         'index.html',
@@ -867,6 +893,8 @@ def render_index(user, cookie_header='', query=None):
         category_cards=''.join(category_cards),
         recently_viewed_block=render_recently_viewed_block(cookie_header),
         category_status_block=category_status_block,
+        search_action='/',
+        search_query=html.escape(search_query),
         **get_template_user_context(user)
     )
 
