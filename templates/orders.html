@@ -1,10 +1,30 @@
-<main class="section container">
-  <div class="login-shell">
-    <div class="login-card">
-      <p class="eyebrow">Recent activity</p>
+<main class="section container orders-page">
+  <section class="orders-hero">
+    <div>
+      <p class="eyebrow">Recent Activity</p>
       <h1>Your Orders</h1>
-      $order_rows
-      <a class="btn btn-primary" href="/" style="margin-top:1rem;">Continue Shopping</a>
+      <p class="login-copy">Track what you have purchased and continue building your organic wellness routine.</p>
     </div>
+    <div class="orders-hero-actions">
+      <a class="btn btn-primary" href="/">Continue Shopping</a>
+      <a class="btn btn-secondary" href="/wishlist">Open Wishlist</a>
+    </div>
+  </section>
+
+  <div class="orders-shell">
+    <section class="orders-list-card">
+      <h2>Order History</h2>
+      $order_rows
+    </section>
+
+    <aside class="orders-side-card">
+      <h3>Shopping Tips</h3>
+      <ul class="feature-list">
+        <li>Save repeat purchases in wishlist for faster checkout.</li>
+        <li>Visit product pages to view ratings and fresh reviews.</li>
+        <li>Keep your delivery address updated in your account.</li>
+      </ul>
+      <a class="btn btn-secondary" href="/user/home">Go to My Home</a>
+    </aside>
   </div>
 </main>

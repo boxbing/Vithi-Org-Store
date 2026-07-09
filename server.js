@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 8001;
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -39,14 +39,144 @@ const products = [
 ];
 
 const users = [];
-const orders = [];
+const sessions = new Map();
+
+function createSessionId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function parseCookies(req) {
+  const cookieHeader = req.headers.cookie;
+  if (!cookieHeader) {
+    return {};
+  }
+
+  return cookieHeader.split(';').reduce((cookies, pair) => {
+    const separatorIndex = pair.indexOf('=');
+    if (separatorIndex === -1) {
+      return cookies;
+    }
+
+    const key = pair.slice(0, separatorIndex).trim();
+    const value = decodeURIComponent(pair.slice(separatorIndex + 1).trim());
+    cookies[key] = value;
+    return cookies;
+  }, {});
+}
+
+function setSessionCookie(res, sessionId) {
+  const cookieValue = `sid=${sessionId}; Path=/; HttpOnly; SameSite=Lax`;
+  const existing = res.getHeader('Set-Cookie');
+
+  if (!existing) {
+    res.setHeader('Set-Cookie', cookieValue);
+    return;
+  }
+
+  if (Array.isArray(existing)) {
+    res.setHeader('Set-Cookie', [...existing, cookieValue]);
+    return;
+  }
+
+  res.setHeader('Set-Cookie', [existing, cookieValue]);
+}
+
+function getSession(req, res) {
+  if (req.session) {
+    return req.session;
+  }
+
+  const cookies = parseCookies(req);
+  let sessionId = cookies.sid;
+
+  if (!sessionId || !sessions.has(sessionId)) {
+    sessionId = createSessionId();
+    sessions.set(sessionId, { cart: [], wishlist: [], orders: [] });
+    setSessionCookie(res, sessionId);
+  }
+
+  req.session = sessions.get(sessionId);
+  return req.session;
+}
+
+function normalizeProductId(rawProductId) {
+  const productId = Number(rawProductId);
+  return Number.isInteger(productId) ? productId : null;
+}
+
+function getProductById(rawProductId) {
+  const productId = normalizeProductId(rawProductId);
+  if (productId === null) {
+    return null;
+  }
+  return products.find((item) => item.id === productId) || null;
+}
+
+function addToCart(session, rawProductId, quantity = 1) {
+  const product = getProductById(rawProductId);
+  if (!product) {
+    return false;
+  }
+
+  const safeQuantity = Math.max(1, Number(quantity) || 1);
+  const existingItem = session.cart.find((entry) => entry.productId === product.id);
+
+  if (existingItem) {
+    existingItem.quantity += safeQuantity;
+  } else {
+    session.cart.push({ productId: product.id, quantity: safeQuantity });
+  }
+
+  return true;
+}
+
+function buildCartItems(session) {
+  return session.cart
+    .map((entry) => {
+      const product = getProductById(entry.productId);
+      if (!product) {
+        return null;
+      }
+
+      const lineTotal = product.price * entry.quantity;
+      return {
+        productId: product.id,
+        quantity: entry.quantity,
+        product,
+        lineTotal
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildCartSummary(cartItems) {
+  const subtotal = cartItems.reduce((sum, item) => sum + item.lineTotal, 0);
+  const tax = subtotal > 0 ? Math.round(subtotal * 0.12) : 0;
+  const shipping = 0;
+  const total = subtotal + tax + shipping;
+
+  return { subtotal, tax, shipping, total };
+}
+
+function buildWishlistItems(session) {
+  return session.wishlist
+    .map((productId) => getProductById(productId))
+    .filter(Boolean);
+}
+
+app.use((req, res, next) => {
+  const session = getSession(req, res);
+  res.locals.cartCount = session.cart.reduce((count, item) => count + item.quantity, 0);
+  res.locals.wishlistCount = session.wishlist.length;
+  next();
+});
 
 app.get('/', (req, res) => {
   res.render('index', { title: 'Vithi Organics', products });
 });
 
 app.get('/products/:id', (req, res) => {
-  const product = products.find((item) => item.id === Number(req.params.id));
+  const product = getProductById(req.params.id);
   if (!product) {
     return res.status(404).send('Product not found');
   }
@@ -83,23 +213,130 @@ app.post('/register', (req, res) => {
 });
 
 app.get('/cart', (req, res) => {
-  res.render('cart', { title: 'Cart' });
+  const session = getSession(req, res);
+  const cartItems = buildCartItems(session);
+  const summary = buildCartSummary(cartItems);
+  res.render('cart', { title: 'Cart', cartItems, summary });
+});
+
+app.post('/cart/add', (req, res) => {
+  const session = getSession(req, res);
+  const productId = req.body.productId || req.query.productId;
+  addToCart(session, productId, req.body.quantity);
+  res.redirect('/cart');
+});
+
+app.post('/cart/update', (req, res) => {
+  const session = getSession(req, res);
+  const product = getProductById(req.body.productId);
+  const quantity = Math.max(0, Number(req.body.quantity) || 0);
+
+  if (!product) {
+    return res.redirect('/cart');
+  }
+
+  if (quantity === 0) {
+    session.cart = session.cart.filter((entry) => entry.productId !== product.id);
+  } else {
+    const cartItem = session.cart.find((entry) => entry.productId === product.id);
+    if (cartItem) {
+      cartItem.quantity = quantity;
+    }
+  }
+
+  return res.redirect('/cart');
+});
+
+app.post('/cart/remove', (req, res) => {
+  const session = getSession(req, res);
+  const product = getProductById(req.body.productId);
+
+  if (product) {
+    session.cart = session.cart.filter((entry) => entry.productId !== product.id);
+  }
+
+  res.redirect('/cart');
 });
 
 app.get('/wishlist', (req, res) => {
-  res.render('wishlist', { title: 'Wishlist' });
+  const session = getSession(req, res);
+  const wishlistItems = buildWishlistItems(session);
+  res.render('wishlist', { title: 'Wishlist', wishlistItems });
+});
+
+app.post('/wishlist/add', (req, res) => {
+  const session = getSession(req, res);
+  const product = getProductById(req.body.productId);
+
+  if (product && !session.wishlist.includes(product.id)) {
+    session.wishlist.push(product.id);
+  }
+
+  res.redirect('/wishlist');
+});
+
+app.post('/wishlist/remove', (req, res) => {
+  const session = getSession(req, res);
+  const product = getProductById(req.body.productId);
+
+  if (product) {
+    session.wishlist = session.wishlist.filter((productId) => productId !== product.id);
+  }
+
+  res.redirect('/wishlist');
+});
+
+app.post('/wishlist/move-to-cart', (req, res) => {
+  const session = getSession(req, res);
+  const product = getProductById(req.body.productId);
+
+  if (product) {
+    addToCart(session, product.id, 1);
+    session.wishlist = session.wishlist.filter((productId) => productId !== product.id);
+  }
+
+  res.redirect('/wishlist');
+});
+
+app.post('/wishlist/add-all-to-cart', (req, res) => {
+  const session = getSession(req, res);
+
+  session.wishlist.forEach((productId) => {
+    addToCart(session, productId, 1);
+  });
+  session.wishlist = [];
+
+  res.redirect('/cart');
 });
 
 app.get('/orders', (req, res) => {
-  res.render('orders', { title: 'Orders', orders });
+  const session = getSession(req, res);
+  res.render('orders', { title: 'Orders', orders: session.orders });
 });
 
 app.post('/orders', (req, res) => {
+  const session = getSession(req, res);
+  const cartItems = buildCartItems(session);
+  const summary = buildCartSummary(cartItems);
+
+  if (cartItems.length > 0) {
+    const productName = cartItems.map((item) => item.product.name).join(', ');
+    session.orders.push({ productName, total: summary.total, createdAt: new Date().toISOString() });
+    session.cart = [];
+    return res.redirect('/orders');
+  }
+
   const { productName, total } = req.body;
-  orders.push({ productName, total, createdAt: new Date().toISOString() });
+  if (productName && total) {
+    session.orders.push({ productName, total, createdAt: new Date().toISOString() });
+  }
   res.redirect('/orders');
 });
 
-app.listen(PORT, () => {
-  console.log(`Vithi Organics server running on http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Vithi Organics Node runtime (secondary) running on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = { app };

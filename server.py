@@ -1007,7 +1007,7 @@ def render_category_page(user, cookie_header, category, query):
     )
 
 
-def render_product(user, product, review_message=''):
+def render_product(user, product, cookie_header='', review_message=''):
     product_weight = f'{float(product.get("weightKg", 1.0)):.2f} kg'
     product_reviews = [item for item in reviews if str(item.get('productId')) == str(product['id'])]
     review_count = len(product_reviews)
@@ -1078,6 +1078,7 @@ def render_product(user, product, review_message=''):
         product_review_rows=review_rows,
         review_form_block=review_form_block,
         review_message_block=message_block,
+        recently_viewed_block=render_recently_viewed_block(cookie_header),
         **get_template_user_context(user)
     )
 
@@ -1203,7 +1204,7 @@ def render_orders(user):
     return make_template('orders.html', title='Orders', order_rows=order_rows, **get_template_user_context(user))
 
 
-def render_user_home(user, message=''):
+def render_user_home(user, cookie_header='', message=''):
     user_orders = [order for order in orders if order.get('userEmail') == user['email']]
     if not user_orders:
         order_rows = '<p class="login-copy">No previous orders yet. Your future purchases will appear here.</p>'
@@ -1227,6 +1228,7 @@ def render_user_home(user, message=''):
         user_phone=html.escape(user.get('phone', '')),
         address_value=html.escape(user.get('address', '')),
         order_rows=order_rows,
+        recently_viewed_block=render_recently_viewed_block(cookie_header),
         **get_template_user_context(user)
     )
 
@@ -1440,7 +1442,7 @@ class VithiHandler(SimpleHTTPRequestHandler):
             cookie['vithi_recently_viewed'] = recently_cookie_value
             cookie['vithi_recently_viewed']['path'] = '/'
             self.respond_html(
-                render_product(user, product, review_message=review_message),
+                render_product(user, product, self.headers.get('Cookie'), review_message=review_message),
                 extra_headers=[('Set-Cookie', cookie.output(header=''))]
             )
             return
@@ -1479,7 +1481,7 @@ class VithiHandler(SimpleHTTPRequestHandler):
             message = ''
             if params.get('updated', [''])[0] == '1':
                 message = 'Address updated successfully.'
-            self.respond_html(render_user_home(user, message=message))
+            self.respond_html(render_user_home(user, self.headers.get('Cookie'), message=message))
             return
         if path == '/admin/subscribers':
             if not admin_user:

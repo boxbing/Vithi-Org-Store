@@ -15,6 +15,10 @@
     <div class="category-main">
       <form class="category-toolbar" method="get" action="/category/$category_slug">
         <div class="category-toolbar-group">
+          <label for="q">Search in this category</label>
+          <input id="q" name="q" type="search" value="$search_query" placeholder="Search products" />
+        </div>
+        <div class="category-toolbar-group">
           <label for="sort">Sort By</label>
           <select id="sort" name="sort">
             <option value="featured" $sort_featured_selected>Featured</option>
@@ -24,7 +28,6 @@
             <option value="price_high" $sort_price_high_selected>Price: High to Low</option>
           </select>
         </div>
-        <input type="hidden" name="q" value="$search_query" />
         <input type="hidden" name="page" value="1" />
         <button class="btn btn-primary" type="submit">Apply</button>
       </form>
@@ -62,6 +65,11 @@
         <div class="category-search-matches">
           $search_match_items
         </div>
+      </section>
+
+      <section class="category-side-card">
+        <h3>Need Help Choosing?</h3>
+        <p class="login-copy">Use sort and search together to quickly find products that match your wellness goals.</p>
       </section>
     </aside>
   </section>

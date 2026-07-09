@@ -1,7 +1,12 @@
 <main class="section container">
   <div class="product-page" style="display:grid;grid-template-columns:1fr 420px;gap:1.6rem;align-items:start;">
     <div class="product-gallery">
-      <img src="$product_image" alt="$product_name" style="width:100%;border-radius:12px;" />
+      <img id="product-main" src="$product_image" alt="$product_name" style="width:100%;border-radius:12px;" />
+      <div style="display:flex;gap:0.6rem;margin-top:0.8rem;">
+        <img class="thumb" src="$product_image" alt="$product_name thumbnail" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;" />
+        <img class="thumb" src="https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=300&q=80" alt="Product alternate view" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;" />
+        <img class="thumb" src="https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=300&q=80" alt="Product lifestyle view" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;" />
+      </div>
       <section style="margin-top:1.2rem;">
         <h3>Product Details</h3>
         <p style="color:var(--muted);max-width:72ch;">$product_description</p>
@@ -29,6 +34,15 @@
         </form>
       </div>
 
+      <div style="margin-top:1rem;color:var(--muted);font-size:0.95rem;">
+        <p><strong>Highlights:</strong></p>
+        <ul>
+          <li>100% Organic</li>
+          <li>Pesticide Free</li>
+          <li>Carefully sourced and quality checked</li>
+        </ul>
+      </div>
+
       <section class="product-review-section" style="margin-top:1.2rem;">
         <h3>Ratings & Comments</h3>
         $review_message_block
@@ -37,4 +51,38 @@
       </section>
     </aside>
   </div>
+
+  <section style="margin-top:2.2rem;">
+    <div class="section-heading flex-between">
+      <div>
+        <p class="eyebrow">Similar Products</p>
+        <h2>Customers Also Bought</h2>
+      </div>
+    </div>
+    <div class="card-grid product-grid" style="margin-top:1rem;">
+      <article class="card product-card">
+        <img src="https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=900&q=80" alt="Organic Ginger Powder" />
+        <div class="card-body">
+          <h3>Organic Ginger Powder</h3>
+          <div class="price-row"><strong>₹199</strong></div>
+        </div>
+      </article>
+      <article class="card product-card">
+        <img src="https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=900&q=80" alt="Herbal Immunity Mix" />
+        <div class="card-body">
+          <h3>Herbal Immunity Mix</h3>
+          <div class="price-row"><strong>₹349</strong></div>
+        </div>
+      </article>
+      <article class="card product-card">
+        <img src="https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=900&q=80" alt="Wildflower Organic Honey" />
+        <div class="card-body">
+          <h3>Wildflower Organic Honey</h3>
+          <div class="price-row"><strong>₹399</strong></div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  $recently_viewed_block
 </main>

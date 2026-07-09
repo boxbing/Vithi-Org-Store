@@ -8,6 +8,10 @@
         <p><strong>Email:</strong> $user_email</p>
         <p><strong>Phone:</strong> $user_phone</p>
       </div>
+      <div class="profile-chips">
+        <span class="badge">Verified Account</span>
+        <span class="badge">Secure Checkout</span>
+      </div>
       <form class="auth-form" method="POST" action="/user/address">
         <label for="address">Delivery Address</label>
         <textarea id="address" name="address" rows="4" placeholder="Enter your full address">$address_value</textarea>
@@ -19,7 +23,21 @@
       <p class="eyebrow">Order History</p>
       <h2>Previous Orders</h2>
       $order_rows
-      <a class="btn btn-primary" href="/">Continue Shopping</a>
+      <div class="user-quick-actions">
+        <a class="btn btn-primary" href="/">Continue Shopping</a>
+        <a class="btn btn-secondary" href="/orders">View All Orders</a>
+      </div>
     </section>
   </div>
+
+  <section class="user-support-card">
+    <h2>Account Shortcuts</h2>
+    <div class="user-support-links">
+      <a href="/wishlist">My Wishlist</a>
+      <a href="/cart">My Cart</a>
+      <a href="/orders">Order History</a>
+    </div>
+  </section>
+
+  $recently_viewed_block
 </main>
