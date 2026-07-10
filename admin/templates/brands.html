@@ -1,0 +1,151 @@
+<div class="admin-card">
+  <div class="admin-card-head">
+    <div>
+      <p class="admin-kicker">Catalog</p>
+      <h1>Brand Management</h1>
+    </div>
+    <span class="admin-pill">Total: $brand_count</span>
+  </div>
+
+  $form_message
+
+  <form class="admin-filter-row" method="get" action="/admin/brands">
+    <label>
+      Search
+      <input type="search" name="q" value="$search_query" placeholder="Brand ID, Brand Name, Company, GST, Contact" />
+    </label>
+    <label>
+      Status
+      <select name="status">
+        <option value="all" $filter_all_selected>All</option>
+        <option value="online" $filter_online_selected>Active</option>
+        <option value="offline" $filter_offline_selected>Inactive</option>
+      </select>
+    </label>
+    <label>
+      Sort
+      <select name="sort">
+        <option value="brand_name" $sort_brand_name_selected>Brand Name</option>
+        <option value="company_name" $sort_company_name_selected>Company Name</option>
+        <option value="created_date" $sort_created_selected>Creation Date</option>
+        <option value="modified_date" $sort_modified_selected>Last Modified Date</option>
+      </select>
+    </label>
+    <button type="submit" class="admin-btn">Apply</button>
+  </form>
+
+  <form id="brand-form" class="admin-form-grid" method="post" action="/admin/brands/save" enctype="multipart/form-data">
+    $edit_hidden_id
+    <div>
+      <label>Brand ID (Read Only)</label>
+      <input type="text" value="$form_id" readonly />
+    </div>
+    <div>
+      <label>Brand Name *</label>
+      <input type="text" name="brandName" value="$form_brand_name" required />
+    </div>
+    <div>
+      <label>Company Complete Name / Legal Name *</label>
+      <input type="text" name="companyName" value="$form_company_name" required />
+    </div>
+    <div>
+      <label>GST Number (GSTIN)</label>
+      <input type="text" name="gstNumber" value="$form_gst_number" placeholder="22AAAAA0000A1Z5" />
+    </div>
+    <div>
+      <label>Contact Person Name</label>
+      <input type="text" name="contactPersonName" value="$form_contact_person_name" />
+    </div>
+    <div>
+      <label>Primary Contact Number *</label>
+      <input type="text" name="primaryContactNumber" value="$form_primary_contact_number" required />
+    </div>
+    <div>
+      <label>Secondary Contact Number</label>
+      <input type="text" name="secondaryContactNumber" value="$form_secondary_contact_number" />
+    </div>
+    <div>
+      <label>Email Address</label>
+      <input type="email" name="emailAddress" value="$form_email_address" />
+    </div>
+    <div>
+      <label>Brand Website URL</label>
+      <input type="url" name="websiteUrl" value="$form_website_url" placeholder="https://example.com" />
+    </div>
+    <div>
+      <label>Brand Status</label>
+      <select name="status">
+        <option value="online" $status_online_selected>Online / Active</option>
+        <option value="offline" $status_offline_selected>Offline / Inactive</option>
+      </select>
+    </div>
+    <div class="admin-span-2">
+      <label>Company Address</label>
+      <textarea name="companyAddress" rows="3" placeholder="Complete registered or business address">$form_company_address</textarea>
+    </div>
+    <div class="admin-span-2">
+      <label>Brand Logo</label>
+      <input type="file" name="logo" accept="image/*" />
+      <input type="text" name="logoPath" value="$form_logo_path" readonly />
+      <div class="admin-preview">$logo_preview_block</div>
+    </div>
+    <div class="admin-span-2">
+      <label>Brand Description (HTML)</label>
+      <textarea name="brandDescription" rows="5" placeholder="Enter HTML content with headings, lists, links, and formatting">$form_brand_description</textarea>
+    </div>
+
+    <div class="admin-divider admin-span-2"></div>
+
+    <div>
+      <label>Products Associated (Read Only)</label>
+      <input type="text" value="$form_product_count" readonly />
+    </div>
+    <div>
+      <label>Created Date & Time (Read Only)</label>
+      <input type="text" value="$form_created_at" readonly />
+    </div>
+    <div>
+      <label>Last Modified Date & Time (Read Only)</label>
+      <input type="text" value="$form_modified_at" readonly />
+    </div>
+    <div>
+      <label>Created By (Read Only)</label>
+      <input type="text" value="$form_created_by" readonly />
+    </div>
+    <div>
+      <label>Modified By (Read Only)</label>
+      <input type="text" value="$form_modified_by" readonly />
+    </div>
+
+    <div class="admin-actions-row admin-span-2">
+      <button type="submit" class="admin-btn">Save Brand</button>
+      <a href="/admin/brands" class="admin-btn admin-btn-secondary">Reset</a>
+    </div>
+  </form>
+
+  <div class="admin-table-wrap">
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>Brand ID</th>
+          <th>Brand Name</th>
+          <th>Company Name</th>
+          <th>GST Number</th>
+          <th>Contact Person</th>
+          <th>Primary Contact</th>
+          <th>Product Count</th>
+          <th>Status</th>
+          <th>Created Date</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        $brand_rows
+      </tbody>
+    </table>
+  </div>
+
+  <nav class="admin-pagination" aria-label="Brand pagination">
+    $brand_pagination
+  </nav>
+</div>

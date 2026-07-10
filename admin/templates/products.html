@@ -1,0 +1,231 @@
+<div class="admin-card">
+  <div class="admin-card-head">
+    <div>
+      <p class="admin-kicker">Catalog</p>
+      <h1>Product Management</h1>
+    </div>
+    <span class="admin-pill">Total: $product_count</span>
+  </div>
+
+  $form_message
+
+  <form class="admin-filter-row" method="get" action="/admin/products">
+    <label>
+      Search
+      <input type="search" name="q" value="$search_query" placeholder="Product ID, Name, Slug, Barcode, Keywords" />
+    </label>
+    <label>
+      Status
+      <select name="status">
+        <option value="all" $filter_all_selected>All</option>
+        <option value="online" $filter_online_selected>Online</option>
+        <option value="offline" $filter_offline_selected>Offline</option>
+      </select>
+    </label>
+    <label>
+      Sort
+      <select name="sort">
+        <option value="display_order" $sort_display_selected>Display Order</option>
+        <option value="name" $sort_name_selected>Product Name</option>
+        <option value="created_date" $sort_created_selected>Creation Date</option>
+        <option value="modified_date" $sort_modified_selected>Last Modified Date</option>
+      </select>
+    </label>
+    <button type="submit" class="admin-btn">Apply</button>
+  </form>
+
+  <form class="admin-form-grid" method="post" action="/admin/products/save" enctype="multipart/form-data">
+    $edit_hidden_id
+
+    <div>
+      <label>Product ID (Read Only)</label>
+      <input type="text" value="$form_id" readonly />
+    </div>
+    <div>
+      <label>Product Name *</label>
+      <input type="text" name="productName" value="$form_name" required />
+    </div>
+    <div>
+      <label>Category *</label>
+      <select name="categoryId" required>
+        <option value="">Select active category</option>
+        $form_category_options
+      </select>
+    </div>
+    <div>
+      <label>Brand *</label>
+      <select name="brandId" required>
+        <option value="">Select active brand</option>
+        $form_brand_options
+      </select>
+    </div>
+
+    <div class="admin-span-2">
+      <label>Product Description (Rich Text HTML)</label>
+      <textarea name="descriptionHtml" rows="6" placeholder="Enter rich text HTML with emojis and unicode support">$form_description</textarea>
+    </div>
+
+    <div class="admin-divider admin-span-2"></div>
+
+    <div class="admin-span-2">
+      <h3 style="margin:0;color:#384551;">Media</h3>
+      <p class="admin-helper">Upload up to 5 images. Keep at least one image and choose a primary image.</p>
+    </div>
+
+    $form_image_slots
+
+    <div>
+      <label>YouTube Video ID or URL</label>
+      <input type="text" name="youtubeVideoId" value="$form_youtube_video" placeholder="https://www.youtube.com/watch?v=... or video id" />
+    </div>
+    <div>
+      <label>Barcode / EAN / UPC</label>
+      <input type="text" name="barcode" value="$form_barcode" />
+    </div>
+
+    <div class="admin-divider admin-span-2"></div>
+
+    <div class="admin-span-2">
+      <h3 style="margin:0;color:#384551;">Pricing and Tax</h3>
+    </div>
+
+    <div>
+      <label>MRP *</label>
+      <input type="number" name="mrp" value="$form_mrp" min="0" step="0.01" required />
+    </div>
+    <div>
+      <label>Selling Price *</label>
+      <input type="number" name="sellingPrice" value="$form_selling_price" min="0" step="0.01" required />
+    </div>
+    <div>
+      <label>Discount Percentage (Auto)</label>
+      <input type="number" name="discountPercentage" value="$form_discount_percentage" step="0.01" readonly />
+    </div>
+    <div>
+      <label>GST Percentage *</label>
+      <select name="gstPercentage" required>
+        $form_gst_options
+      </select>
+    </div>
+
+    <div class="admin-divider admin-span-2"></div>
+
+    <div class="admin-span-2">
+      <h3 style="margin:0;color:#384551;">Inventory and Weight</h3>
+    </div>
+
+    <div>
+      <label>Product Weight Value *</label>
+      <input type="number" name="productWeightValue" value="$form_product_weight_value" min="0.001" step="0.001" required />
+    </div>
+    <div>
+      <label>Weight Unit *</label>
+      <select name="weightUnit" required>
+        $form_weight_unit_options
+      </select>
+    </div>
+    <div>
+      <label>Actual Shipping Weight (grams) *</label>
+      <input type="number" name="shippingWeightGrams" value="$form_shipping_weight_grams" min="0" step="1" required />
+    </div>
+    <div>
+      <label>Units in Stock *</label>
+      <input type="number" name="unitsInStock" value="$form_units_in_stock" min="0" step="1" required />
+    </div>
+    <div>
+      <label>Stock Status (Auto)</label>
+      <input type="text" value="$form_stock_status" readonly />
+    </div>
+    <div>
+      <label>Display Order *</label>
+      <input type="number" name="displayOrder" value="$form_display_order" min="1" step="1" required />
+    </div>
+
+    <div class="admin-divider admin-span-2"></div>
+
+    <div class="admin-span-2">
+      <h3 style="margin:0;color:#384551;">SEO and Search</h3>
+    </div>
+
+    <div>
+      <label>Product Slug</label>
+      <input type="text" name="slug" value="$form_slug" placeholder="auto-generated-from-product-name" />
+    </div>
+    <div>
+      <label>SEO Page Title</label>
+      <input type="text" name="seoPageTitle" value="$form_seo_page_title" />
+    </div>
+    <div class="admin-span-2">
+      <label>SEO Meta Description</label>
+      <textarea name="seoMetaDescription" rows="3" maxlength="160">$form_seo_meta_description</textarea>
+    </div>
+    <div>
+      <label>SEO Meta Keywords</label>
+      <input type="text" name="seoMetaKeywords" value="$form_seo_meta_keywords" placeholder="keyword1, keyword2" />
+    </div>
+    <div>
+      <label>Search Keywords</label>
+      <input type="text" name="searchKeywords" value="$form_search_keywords" placeholder="amla, aonla, आंवला" />
+    </div>
+    <div class="admin-span-2">
+      <label>Canonical URL</label>
+      <input type="text" name="canonicalUrl" value="$form_canonical_url" placeholder="/product/your-product-slug" />
+    </div>
+
+    <div class="admin-divider admin-span-2"></div>
+
+    <div>
+      <label>Product Online Status</label>
+      <select name="onlineStatus">
+        <option value="online" $form_online_selected>Online</option>
+        <option value="offline" $form_offline_selected>Offline</option>
+      </select>
+    </div>
+
+    <div></div>
+
+    <div>
+      <label>Created Date & Time (Read Only)</label>
+      <input type="text" value="$form_created_at" readonly />
+    </div>
+    <div>
+      <label>Last Modified Date & Time (Read Only)</label>
+      <input type="text" value="$form_modified_at" readonly />
+    </div>
+    <div>
+      <label>Created By (Read Only)</label>
+      <input type="text" value="$form_created_by" readonly />
+    </div>
+    <div>
+      <label>Modified By (Read Only)</label>
+      <input type="text" value="$form_modified_by" readonly />
+    </div>
+
+    <div class="admin-actions-row admin-span-2">
+      <button type="submit" class="admin-btn">Save Product</button>
+      <a href="/admin/products" class="admin-btn admin-btn-secondary">Reset</a>
+    </div>
+  </form>
+
+  <div class="admin-table-wrap">
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Category</th>
+          <th>Brand</th>
+          <th>MRP</th>
+          <th>Selling</th>
+          <th>Stock</th>
+          <th>Status</th>
+          <th>Modified</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        $product_rows
+      </tbody>
+    </table>
+  </div>
+</div>

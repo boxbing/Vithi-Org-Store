@@ -31,6 +31,10 @@ SUBSCRIBERS_FILE = os.path.join(ADMIN_DATA_DIR, 'subscribers.json')
 ADMIN_AUTH_FILE = os.path.join(ADMIN_DATA_DIR, 'auth.json')
 CATEGORIES_FILE = os.path.join(ADMIN_DATA_DIR, 'categories.json')
 CATEGORY_IMAGE_DIR = os.path.join(DATA_DIR, 'assets', 'category-images')
+BRANDS_FILE = os.path.join(ADMIN_DATA_DIR, 'brands.json')
+BRAND_LOGO_DIR = os.path.join(DATA_DIR, 'assets', 'brand-logos')
+PRODUCTS_FILE = os.path.join(ADMIN_DATA_DIR, 'products.json')
+PRODUCT_IMAGE_DIR = os.path.join(DATA_DIR, 'assets', 'product-images')
 DATABASE_URL = os.environ.get('DATABASE_URL') or os.environ.get('POSTGRES_URL') or 'postgresql://postgres:postgres@localhost:5432/vithi'
 ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
@@ -46,9 +50,14 @@ orders = []
 reviews = []
 subscribers = []
 categories = []
+brands = []
+products = []
 admin_auth = {'username': ADMIN_USERNAME, 'password_hash': ''}
 db_connection = None
 db_ready = False
+
+ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
+MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
 
 # Phase 1 features (Python runtime source of truth):
 # - User authentication (register/login/logout) with session cookies
@@ -59,6 +68,7 @@ db_ready = False
 # - Recently viewed products on home/category/product/user home pages
 # - Newsletter subscriptions and admin login/category management
 # - PostgreSQL persistence with JSON fallback
+# - Admin category and brand management with audit fields and status controls
 
 
 def ensure_data_dir():
@@ -67,6 +77,8 @@ def ensure_data_dir():
         os.makedirs(ADMIN_DATA_DIR, exist_ok=True)
         os.makedirs(ADMIN_TEMPLATE_DIR, exist_ok=True)
         os.makedirs(CATEGORY_IMAGE_DIR, exist_ok=True)
+        os.makedirs(BRAND_LOGO_DIR, exist_ok=True)
+        os.makedirs(PRODUCT_IMAGE_DIR, exist_ok=True)
     except Exception:
         pass
 
@@ -433,43 +445,345 @@ def is_valid_email(value):
     return bool(local and domain and '.' in domain)
 
 
+def is_valid_gstin(value):
+    if not value:
+        return True
+    return bool(re.fullmatch(r'\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]', value.strip().upper()))
+
+
+def is_valid_phone(value, required=False):
+    normalized = value.strip()
+    if not normalized:
+        return not required
+    return bool(re.fullmatch(r'\+?[0-9][0-9\s\-]{6,19}', normalized))
+
+
+def is_valid_website_url(value):
+    normalized = value.strip()
+    if not normalized:
+        return True
+    return bool(re.fullmatch(r'https?://[^\s/$.?#].[^\s]*', normalized, re.IGNORECASE))
+
+
 initialize_persistence()
 initialize_admin_auth()
 
-products = [
-    {
-        'id': 1,
-        'categoryId': 1,
-        'name': 'Organic Turmeric Powder',
-        'price': 249,
-        'weightKg': 1.0,
-        'description': 'Pure, earthy spice with antioxidant-rich wellness benefits.',
-        'image': 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=900&q=80'
-    },
-    {
-        'id': 2,
-        'categoryId': 2,
-        'name': 'Botanical Face Serum',
-        'price': 599,
-        'weightKg': 1.0,
-        'description': 'Lightweight nourishment for calm, glowing, healthy skin.',
-        'image': 'https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=900&q=80'
-    },
-    {
-        'id': 3,
-        'categoryId': 3,
-        'name': 'Wildflower Organic Honey',
-        'price': 399,
-        'weightKg': 1.0,
-        'description': 'Pure sweetness with floral richness and natural goodness.',
-        'image': 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=900&q=80'
-    }
-]
-
 
 def slugify(value):
-    slug = re.sub(r'[^a-zA-Z0-9]+', '-', value.strip().lower()).strip('-')
-    return slug or 'category'
+    text = str(value or '').strip().lower()
+    text = re.sub(r'[^\w\s-]', '', text, flags=re.UNICODE)
+    text = re.sub(r'[-\s]+', '-', text, flags=re.UNICODE).strip('-')
+    return text or 'item'
+
+
+def unique_slug(base_slug, items, key='slug', current_id=''):
+    normalized = slugify(base_slug)
+    candidate = normalized
+    suffix = 2
+    seen = {
+        str(item.get(key, '')).strip().lower()
+        for item in items
+        if str(item.get('id', '')) != str(current_id)
+    }
+    while candidate.lower() in seen:
+        candidate = f'{normalized}-{suffix}'
+        suffix += 1
+    return candidate
+
+
+def sanitize_rich_text(raw_html):
+    content = str(raw_html or '')
+    content = re.sub(r'(?is)<\s*(script|style)[^>]*>.*?<\s*/\s*\1\s*>', '', content)
+    content = re.sub(r'<!--.*?-->', '', content, flags=re.DOTALL)
+    content = re.sub(r'\son[a-zA-Z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)', '', content)
+    content = re.sub(r'(?i)(href|src)\s*=\s*(["\'])\s*javascript:[^\2]*\2', '\\1="#"', content)
+    return content.strip()
+
+
+def extract_text_from_html(raw_html):
+    text = re.sub(r'<[^>]+>', ' ', str(raw_html or ''))
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
+
+def parse_youtube_video_id(value):
+    raw = str(value or '').strip()
+    if not raw:
+        return ''
+    if re.fullmatch(r'[A-Za-z0-9_-]{11}', raw):
+        return raw
+
+    patterns = [
+        r'(?:v=)([A-Za-z0-9_-]{11})',
+        r'youtu\.be/([A-Za-z0-9_-]{11})',
+        r'embed/([A-Za-z0-9_-]{11})',
+        r'shorts/([A-Za-z0-9_-]{11})'
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, raw)
+        if match:
+            return match.group(1)
+    return ''
+
+
+def normalize_comma_list(value):
+    items = [token.strip() for token in str(value or '').split(',') if token.strip()]
+    return ', '.join(items)
+
+
+def parse_float_value(value, default=0.0):
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def save_uploaded_image(uploaded, base_name):
+    if not uploaded or not uploaded.get('filename'):
+        return '', ''
+    filename = str(uploaded.get('filename', ''))
+    _, ext = os.path.splitext(filename)
+    ext = ext.lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        return '', 'Unsupported image type. Allowed: jpg, jpeg, png, webp, gif.'
+    content = uploaded.get('content', b'')
+    if len(content) > MAX_IMAGE_SIZE_BYTES:
+        return '', 'Image exceeds maximum size of 5 MB.'
+    safe_name = f'{slugify(base_name)}-{int(datetime.now().timestamp())}-{random.randint(1000, 9999)}{ext}'
+    target_path = os.path.join(PRODUCT_IMAGE_DIR, safe_name)
+    with open(target_path, 'wb') as out:
+        out.write(content)
+    return f'/assets/product-images/{safe_name}', ''
+
+
+def product_primary_image(product):
+    images = product.get('images') or []
+    if not images:
+        legacy = str(product.get('image', '')).strip()
+        return legacy
+    primary_index = int(product.get('primaryImageIndex', 0) or 0)
+    primary_index = max(0, min(primary_index, len(images) - 1))
+    return str(images[primary_index]).strip()
+
+
+def product_gallery_images(product):
+    images = product.get('images') or []
+    if images:
+        return [str(item).strip() for item in images if str(item).strip()]
+    legacy = str(product.get('image', '')).strip()
+    return [legacy] if legacy else []
+
+
+def product_name(product):
+    return str(product.get('productName') or product.get('name') or '').strip()
+
+
+def product_description_html(product):
+    if str(product.get('descriptionHtml', '')).strip():
+        return str(product.get('descriptionHtml', '')).strip()
+    description = str(product.get('description', '')).strip()
+    return f'<p>{html.escape(description)}</p>' if description else ''
+
+
+def product_price(product):
+    selling_price = parse_float_value(product.get('sellingPrice'), default=-1)
+    if selling_price >= 0:
+        return round(selling_price, 2)
+    return round(parse_float_value(product.get('price'), default=0), 2)
+
+
+def product_weight_label(product):
+    value = str(product.get('productWeightValue', '')).strip()
+    unit = str(product.get('weightUnit', '')).strip()
+    if value and unit:
+        return f'{value} {unit}'
+    return f'{parse_float_value(product.get("weightKg"), 1.0):.2f} kg'
+
+
+def product_public_url(product):
+    slug = str(product.get('slug', '')).strip()
+    if slug:
+        return f'/product/{quote(slug)}'
+    return f'/products/{product.get("id")}'
+
+
+def product_stock_status(product):
+    units = int(parse_float_value(product.get('unitsInStock'), 0))
+    return 'in_stock' if units > 0 else 'out_of_stock'
+
+
+def normalize_product_record(item):
+    normalized = dict(item or {})
+    if 'productName' not in normalized:
+        normalized['productName'] = str(normalized.get('name', '')).strip()
+    if 'descriptionHtml' not in normalized:
+        legacy_description = str(normalized.get('description', '')).strip()
+        normalized['descriptionHtml'] = f'<p>{html.escape(legacy_description)}</p>' if legacy_description else ''
+    if 'images' not in normalized:
+        image = str(normalized.get('image', '')).strip()
+        normalized['images'] = [image] if image else []
+    if 'primaryImageIndex' not in normalized:
+        normalized['primaryImageIndex'] = 0
+    if 'slug' not in normalized:
+        normalized['slug'] = slugify(normalized.get('productName', ''))
+    if 'onlineStatus' not in normalized:
+        normalized['onlineStatus'] = 'online'
+    if 'sellingPrice' not in normalized:
+        normalized['sellingPrice'] = parse_float_value(normalized.get('price'), 0)
+    if 'mrp' not in normalized:
+        normalized['mrp'] = parse_float_value(normalized.get('price'), 0)
+    if 'discountPercentage' not in normalized:
+        mrp = parse_float_value(normalized.get('mrp'), 0)
+        sell = parse_float_value(normalized.get('sellingPrice'), 0)
+        normalized['discountPercentage'] = 0 if mrp <= 0 else round(max(0, (mrp - sell) * 100 / mrp), 2)
+    if 'gstPercentage' not in normalized:
+        normalized['gstPercentage'] = 0
+    if 'productWeightValue' not in normalized:
+        normalized['productWeightValue'] = str(parse_float_value(normalized.get('weightKg'), 1.0))
+    if 'weightUnit' not in normalized:
+        normalized['weightUnit'] = 'kg'
+    if 'shippingWeightGrams' not in normalized:
+        normalized['shippingWeightGrams'] = int(parse_float_value(normalized.get('weightKg'), 1.0) * 1000)
+    if 'unitsInStock' not in normalized:
+        normalized['unitsInStock'] = 10
+    normalized['stockStatus'] = product_stock_status(normalized)
+    if 'youtubeVideoId' not in normalized:
+        normalized['youtubeVideoId'] = ''
+    if 'barcode' not in normalized:
+        normalized['barcode'] = ''
+    if 'seoPageTitle' not in normalized:
+        normalized['seoPageTitle'] = normalized.get('productName', '')
+    if 'seoMetaDescription' not in normalized:
+        normalized['seoMetaDescription'] = extract_text_from_html(normalized.get('descriptionHtml', ''))[:160]
+    if 'seoMetaKeywords' not in normalized:
+        normalized['seoMetaKeywords'] = ''
+    if 'canonicalUrl' not in normalized:
+        normalized['canonicalUrl'] = ''
+    if 'searchKeywords' not in normalized:
+        normalized['searchKeywords'] = ''
+    if 'displayOrder' not in normalized:
+        normalized['displayOrder'] = int(normalized.get('id', 0) or 0)
+    if 'createdAt' not in normalized:
+        normalized['createdAt'] = datetime.now().isoformat(timespec='seconds')
+    if 'modifiedAt' not in normalized:
+        normalized['modifiedAt'] = normalized['createdAt']
+    if 'createdBy' not in normalized:
+        normalized['createdBy'] = admin_auth.get('username', ADMIN_USERNAME)
+    if 'modifiedBy' not in normalized:
+        normalized['modifiedBy'] = normalized['createdBy']
+    return normalized
+
+
+def initialize_products():
+    global products
+    ensure_data_dir()
+    stored = load_json_file(PRODUCTS_FILE, [])
+    if isinstance(stored, list) and stored:
+        products = [normalize_product_record(item) for item in stored if isinstance(item, dict)]
+        save_json_file(PRODUCTS_FILE, products)
+        return
+
+    now = datetime.now().isoformat(timespec='seconds')
+    actor = admin_auth.get('username', ADMIN_USERNAME)
+    products = [
+        {
+            'id': 1,
+            'categoryId': 1,
+            'brandId': 1,
+            'productName': 'Organic Turmeric Powder',
+            'slug': 'organic-turmeric-powder',
+            'images': ['https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=900&q=80'],
+            'primaryImageIndex': 0,
+            'youtubeVideoId': '',
+            'descriptionHtml': '<p>Pure, earthy spice with antioxidant-rich wellness benefits.</p>',
+            'barcode': '',
+            'mrp': 249,
+            'sellingPrice': 249,
+            'discountPercentage': 0,
+            'gstPercentage': 5,
+            'productWeightValue': '1',
+            'weightUnit': 'kg',
+            'shippingWeightGrams': 1000,
+            'unitsInStock': 50,
+            'stockStatus': 'in_stock',
+            'onlineStatus': 'online',
+            'seoPageTitle': 'Organic Turmeric Powder',
+            'seoMetaDescription': 'Pure, earthy spice with antioxidant-rich wellness benefits.',
+            'seoMetaKeywords': 'turmeric, organic spice',
+            'canonicalUrl': '',
+            'searchKeywords': 'turmeric, haldi, organic turmeric powder',
+            'displayOrder': 1,
+            'createdAt': now,
+            'modifiedAt': now,
+            'createdBy': actor,
+            'modifiedBy': actor,
+        },
+        {
+            'id': 2,
+            'categoryId': 2,
+            'brandId': 2,
+            'productName': 'Botanical Face Serum',
+            'slug': 'botanical-face-serum',
+            'images': ['https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=900&q=80'],
+            'primaryImageIndex': 0,
+            'youtubeVideoId': '',
+            'descriptionHtml': '<p>Lightweight nourishment for calm, glowing, healthy skin.</p>',
+            'barcode': '',
+            'mrp': 599,
+            'sellingPrice': 599,
+            'discountPercentage': 0,
+            'gstPercentage': 12,
+            'productWeightValue': '30',
+            'weightUnit': 'ml',
+            'shippingWeightGrams': 250,
+            'unitsInStock': 24,
+            'stockStatus': 'in_stock',
+            'onlineStatus': 'online',
+            'seoPageTitle': 'Botanical Face Serum',
+            'seoMetaDescription': 'Lightweight nourishment for calm, glowing, healthy skin.',
+            'seoMetaKeywords': 'face serum, natural skincare',
+            'canonicalUrl': '',
+            'searchKeywords': 'face serum, botanica, glow serum',
+            'displayOrder': 2,
+            'createdAt': now,
+            'modifiedAt': now,
+            'createdBy': actor,
+            'modifiedBy': actor,
+        },
+        {
+            'id': 3,
+            'categoryId': 3,
+            'brandId': 3,
+            'productName': 'Wildflower Organic Honey',
+            'slug': 'wildflower-organic-honey',
+            'images': ['https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=900&q=80'],
+            'primaryImageIndex': 0,
+            'youtubeVideoId': '',
+            'descriptionHtml': '<p>Pure sweetness with floral richness and natural goodness.</p>',
+            'barcode': '',
+            'mrp': 399,
+            'sellingPrice': 399,
+            'discountPercentage': 0,
+            'gstPercentage': 5,
+            'productWeightValue': '500',
+            'weightUnit': 'g',
+            'shippingWeightGrams': 650,
+            'unitsInStock': 31,
+            'stockStatus': 'in_stock',
+            'onlineStatus': 'online',
+            'seoPageTitle': 'Wildflower Organic Honey',
+            'seoMetaDescription': 'Pure sweetness with floral richness and natural goodness.',
+            'seoMetaKeywords': 'organic honey, wildflower honey',
+            'canonicalUrl': '',
+            'searchKeywords': 'honey, wildflower, organic sweetener',
+            'displayOrder': 3,
+            'createdAt': now,
+            'modifiedAt': now,
+            'createdBy': actor,
+            'modifiedBy': actor,
+        }
+    ]
+    save_json_file(PRODUCTS_FILE, products)
 
 
 def initialize_categories():
@@ -538,10 +852,94 @@ def initialize_categories():
     save_json_file(CATEGORIES_FILE, categories)
 
 
+def initialize_brands():
+    global brands
+    ensure_data_dir()
+    stored = load_json_file(BRANDS_FILE, [])
+    if isinstance(stored, list) and stored:
+        brands = stored
+        return
+
+    now = datetime.now().isoformat(timespec='seconds')
+    default_admin = admin_auth.get('username', ADMIN_USERNAME)
+    brands = [
+        {
+            'id': 1,
+            'brandName': 'Vithi Essentials',
+            'companyName': 'Vithi Organics Private Limited',
+            'companyAddress': '12 Green Market Road, New Delhi, India',
+            'gstNumber': '07ABCDE1234F1Z5',
+            'contactPersonName': 'Asha Verma',
+            'primaryContactNumber': '+91 9876500001',
+            'secondaryContactNumber': '+91 9876500002',
+            'emailAddress': 'brands@vithiorganics.example',
+            'logoPath': '',
+            'brandDescription': '<p>Signature Vithi wellness essentials crafted for daily health and pantry use.</p>',
+            'websiteUrl': 'https://example.com/vithi-essentials',
+            'status': 'online',
+            'createdAt': now,
+            'modifiedAt': now,
+            'createdBy': default_admin,
+            'modifiedBy': default_admin,
+        },
+        {
+            'id': 2,
+            'brandName': 'Botanica Glow',
+            'companyName': 'Botanica Glow Naturals LLP',
+            'companyAddress': '88 Herbal Avenue, Bengaluru, India',
+            'gstNumber': '29ABCDE1234F1Z5',
+            'contactPersonName': 'Neha Kapoor',
+            'primaryContactNumber': '+91 9876500011',
+            'secondaryContactNumber': '',
+            'emailAddress': 'care@botanicaglow.example',
+            'logoPath': '',
+            'brandDescription': '<p>Plant-based skin wellness formulations designed for glow, calm, and hydration.</p>',
+            'websiteUrl': 'https://example.com/botanica-glow',
+            'status': 'online',
+            'createdAt': now,
+            'modifiedAt': now,
+            'createdBy': default_admin,
+            'modifiedBy': default_admin,
+        },
+        {
+            'id': 3,
+            'brandName': 'Honey Harvest',
+            'companyName': 'Honey Harvest Foods Private Limited',
+            'companyAddress': '24 Floral Estate, Pune, India',
+            'gstNumber': '27ABCDE1234F1Z5',
+            'contactPersonName': 'Rohit Mehta',
+            'primaryContactNumber': '+91 9876500021',
+            'secondaryContactNumber': '+91 9876500022',
+            'emailAddress': 'hello@honeyharvest.example',
+            'logoPath': '',
+            'brandDescription': '<p>Natural sweeteners and bee-based pantry products sourced from trusted apiaries.</p>',
+            'websiteUrl': 'https://example.com/honey-harvest',
+            'status': 'online',
+            'createdAt': now,
+            'modifiedAt': now,
+            'createdBy': default_admin,
+            'modifiedBy': default_admin,
+        }
+    ]
+    save_json_file(BRANDS_FILE, brands)
+
+
 def next_category_id():
     if not categories:
         return 1
     return max(int(item.get('id', 0)) for item in categories) + 1
+
+
+def next_brand_id():
+    if not brands:
+        return 1
+    return max(int(item.get('id', 0)) for item in brands) + 1
+
+
+def next_product_id():
+    if not products:
+        return 1
+    return max(int(item.get('id', 0)) for item in products) + 1
 
 
 def get_category_by_id(category_id):
@@ -551,6 +949,37 @@ def get_category_by_id(category_id):
     return None
 
 
+def get_brand_by_id(brand_id):
+    for brand in brands:
+        if str(brand.get('id')) == str(brand_id):
+            return brand
+    return None
+
+
+def get_product_by_id(product_id):
+    for product in products:
+        if str(product.get('id')) == str(product_id):
+            return product
+    return None
+
+
+def get_product_by_slug(slug):
+    normalized = str(slug or '').strip().lower()
+    for product in products:
+        if str(product.get('slug', '')).strip().lower() == normalized:
+            return product
+    return None
+
+
+def get_online_products():
+    visible = [item for item in products if item.get('onlineStatus', 'online') == 'online']
+    return sorted(visible, key=lambda item: int(item.get('displayOrder', 999999)))
+
+
+def get_online_brands():
+    return [item for item in brands if item.get('status', 'online') == 'online']
+
+
 def has_products_for_category(category_id):
     for product in products:
         if str(product.get('categoryId')) == str(category_id):
@@ -558,7 +987,13 @@ def has_products_for_category(category_id):
     return False
 
 
+def count_products_for_brand(brand_id):
+    return sum(1 for product in products if str(product.get('brandId')) == str(brand_id))
+
+
 initialize_categories()
+initialize_brands()
+initialize_products()
 
 
 def load_template(name):
@@ -578,6 +1013,9 @@ def make_template(name, **context):
     context.setdefault('meta_keywords', 'organic, wellness, natural, healthy')
     context.setdefault('meta_robots', 'index,follow')
     context.setdefault('canonical_url', '')
+    context.setdefault('og_title', context.get('title', 'Vithi Organics'))
+    context.setdefault('og_description', context.get('meta_description', ''))
+    context.setdefault('og_image', '')
     context.setdefault('search_action', '/')
     context.setdefault('search_query', '')
     body = Template(load_template(name)).substitute(**context)
@@ -589,6 +1027,9 @@ def make_template(name, **context):
         meta_keywords=context.get('meta_keywords', ''),
         meta_robots=context.get('meta_robots', 'index,follow'),
         canonical_url=context.get('canonical_url', ''),
+        og_title=context.get('og_title', ''),
+        og_description=context.get('og_description', ''),
+        og_image=context.get('og_image', ''),
         header=header,
         content=body,
         footer=footer,
@@ -760,7 +1201,11 @@ def get_category_by_slug(slug):
 
 
 def get_products_for_category(category_id):
-    return [item for item in products if str(item.get('categoryId')) == str(category_id)]
+    scoped = [
+        item for item in get_online_products()
+        if str(item.get('categoryId')) == str(category_id)
+    ]
+    return sorted(scoped, key=lambda item: int(item.get('displayOrder', 999999)))
 
 
 def pick_category_image(category, category_products):
@@ -773,26 +1218,56 @@ def pick_category_image(category, category_products):
         return image_path
 
     if category_products:
-        return str(category_products[0].get('image', ''))
+        return product_primary_image(category_products[0])
     return 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=900&q=80'
 
 
+def get_brand_for_product(product):
+    return get_brand_by_id(product.get('brandId'))
+
+
+def product_matches_search(product, token):
+    brand = get_brand_for_product(product)
+    category = get_category_by_id(product.get('categoryId'))
+    searchable = [
+        product_name(product),
+        extract_text_from_html(product_description_html(product)),
+        str(product.get('searchKeywords', '')),
+        str(product.get('barcode', '')),
+        str(category.get('name', '')) if category else '',
+        str(brand.get('brandName', '')) if brand else '',
+        str(brand.get('companyName', '')) if brand else ''
+    ]
+    normalized = token.lower()
+    return any(normalized in field.lower() for field in searchable if field)
+
+
 def build_product_card(product):
-    weight_label = f'{float(product.get("weightKg", 1.0)):.2f} kg'
+    weight_label = product_weight_label(product)
+    price_value = product_price(product)
+    name = html.escape(product_name(product))
+    image = html.escape(product_primary_image(product))
+    description = html.escape(extract_text_from_html(product_description_html(product))[:140] or 'Discover this organic product.')
+    product_href = product_public_url(product)
+    brand = get_brand_for_product(product)
+    brand_label = ''
+    if brand:
+        brand_label = f'<span class="card-meta">Brand: {html.escape(str(brand.get("brandName", "")))}</span>'
     return (
         f'<article class="card product-card">'
-        f'<a class="product-link" href="/products/{product["id"]}"><img src="{product["image"]}" alt="{product["name"]}" /></a>'
+        f'<a class="product-link" href="{product_href}"><img loading="lazy" src="{image}" alt="{name}" /></a>'
         f'<div class="card-body">'
-        f'<h3><a href="/products/{product["id"]}">{product["name"]}</a></h3>'
-        f'<p>{product["description"]}</p>'
+        f'<h3><a href="{product_href}">{name}</a></h3>'
+        f'<p>{description}</p>'
         f'<span class="card-meta">Weight: {weight_label}</span>'
-        f'<div class="price-row"><strong>₹{product["price"]}</strong><div class="actions">'
+        f'{brand_label}'
+        f'<div class="price-row"><strong>₹{price_value:.2f}</strong><div class="actions">'
         f'<form method="post" action="/cart/add" style="display:inline;">'
-        f'<input type="hidden" name="productId" value="{product["id"]}" />'
+        f'<input type="hidden" name="productId" value="{product.get("id")}" />'
         f'<button class="btn btn-primary" type="submit">Add to Cart</button>'
         f'</form>'
         f'<form method="post" action="/wishlist/add" style="display:inline;">'
-        f'<input type="hidden" name="productId" value="{product["id"]}" />'
+        f'<input type="hidden" name="productId" value="{product.get("id")}" />'
         f'<button class="btn product-wishlist-btn wishlist-icon-btn" type="submit" aria-label="Add to wishlist" title="Add to wishlist">&#9829;</button>'
         f'</form></div></div>'
         f'</div></article>'
@@ -803,7 +1278,7 @@ def get_recently_viewed_ids(cookie_header):
     raw = get_cookie_value(cookie_header, 'vithi_recently_viewed')
     if not raw:
         return []
-    known_ids = {str(item.get('id')) for item in products}
+    known_ids = {str(item.get('id')) for item in get_online_products()}
     unique_ids = []
     for token in raw.split(','):
         item_id = token.strip()
@@ -827,7 +1302,7 @@ def render_recently_viewed_block(cookie_header):
 
     cards = []
     for item_id in viewed_ids:
-        product = next((item for item in products if str(item['id']) == item_id), None)
+        product = next((item for item in get_online_products() if str(item.get('id')) == item_id), None)
         if product is None:
             continue
         cards.append(build_product_card(product))
@@ -846,12 +1321,11 @@ def render_recently_viewed_block(cookie_header):
 def render_index(user, cookie_header='', query=None):
     query = query or {}
     search_query = query.get('q', [''])[0].strip()
-    filtered_products = products
+    filtered_products = get_online_products()
     if search_query:
-        token = search_query.lower()
         filtered_products = [
-            item for item in products
-            if token in item.get('name', '').lower() or token in item.get('description', '').lower()
+            item for item in get_online_products()
+            if product_matches_search(item, search_query)
         ]
 
     if filtered_products:
@@ -913,20 +1387,19 @@ def render_category_page(user, cookie_header, category, query):
     category_products = get_products_for_category(category.get('id'))
     filtered = category_products[:]
     if search_query:
-        token = search_query.lower()
         filtered = [
             item for item in filtered
-            if token in item.get('name', '').lower() or token in item.get('description', '').lower()
+            if product_matches_search(item, search_query)
         ]
 
     if sort_key == 'name_asc':
-        filtered.sort(key=lambda item: item.get('name', '').lower())
+        filtered.sort(key=lambda item: product_name(item).lower())
     elif sort_key == 'name_desc':
-        filtered.sort(key=lambda item: item.get('name', '').lower(), reverse=True)
+        filtered.sort(key=lambda item: product_name(item).lower(), reverse=True)
     elif sort_key == 'price_low':
-        filtered.sort(key=lambda item: float(item.get('price', 0)))
+        filtered.sort(key=lambda item: product_price(item))
     elif sort_key == 'price_high':
-        filtered.sort(key=lambda item: float(item.get('price', 0)), reverse=True)
+        filtered.sort(key=lambda item: product_price(item), reverse=True)
     else:
         sort_key = 'featured'
 
@@ -962,39 +1435,38 @@ def render_category_page(user, cookie_header, category, query):
 
     search_matches = []
     if search_query:
-        token = search_query.lower()
         in_category = [
             item for item in category_products
-            if token in item.get('name', '').lower() or token in item.get('description', '').lower()
+            if product_matches_search(item, search_query)
         ]
         other = [
-            item for item in products
-            if str(item.get('categoryId')) != str(category.get('id')) and (token in item.get('name', '').lower() or token in item.get('description', '').lower())
+            item for item in get_online_products()
+            if str(item.get('categoryId')) != str(category.get('id')) and product_matches_search(item, search_query)
         ]
 
         for item in in_category[:5]:
             search_matches.append(
-                f'<a class="search-match-item" href="/products/{item["id"]}">'
-                f'<img src="{item["image"]}" alt="{html.escape(item["name"])}" />'
-                f'<div><strong>{html.escape(item["name"])}</strong><small>In this category</small></div>'
+                f'<a class="search-match-item" href="{product_public_url(item)}">'
+                f'<img loading="lazy" src="{html.escape(product_primary_image(item))}" alt="{html.escape(product_name(item))}" />'
+                f'<div><strong>{html.escape(product_name(item))}</strong><small>In this category</small></div>'
                 '</a>'
             )
         for item in other[:5]:
             search_matches.append(
-                f'<a class="search-match-item" href="/products/{item["id"]}">'
-                f'<img src="{item["image"]}" alt="{html.escape(item["name"])}" />'
-                f'<div><strong>{html.escape(item["name"])}</strong><small>Similar result</small></div>'
+                f'<a class="search-match-item" href="{product_public_url(item)}">'
+                f'<img loading="lazy" src="{html.escape(product_primary_image(item))}" alt="{html.escape(product_name(item))}" />'
+                f'<div><strong>{html.escape(product_name(item))}</strong><small>Similar result</small></div>'
                 '</a>'
             )
     search_match_items = ''.join(search_matches) if search_matches else '<p class="login-copy">Search to see matching products.</p>'
 
-    recommended = [item for item in products if str(item.get('categoryId')) != str(category.get('id'))][:4]
+    recommended = [item for item in get_online_products() if str(item.get('categoryId')) != str(category.get('id'))][:4]
     recommended_items = []
     for item in recommended:
         recommended_items.append(
-            f'<a class="search-match-item" href="/products/{item["id"]}">'
-            f'<img src="{item["image"]}" alt="{html.escape(item["name"])}" />'
-            f'<div><strong>{html.escape(item["name"])}</strong><small>₹{item["price"]}</small></div>'
+            f'<a class="search-match-item" href="{product_public_url(item)}">'
+            f'<img loading="lazy" src="{html.escape(product_primary_image(item))}" alt="{html.escape(product_name(item))}" />'
+            f'<div><strong>{html.escape(product_name(item))}</strong><small>₹{product_price(item):.2f}</small></div>'
             '</a>'
         )
     recommended_block = ''.join(recommended_items) if recommended_items else '<p class="login-copy">No recommendations available.</p>'
@@ -1036,7 +1508,29 @@ def render_category_page(user, cookie_header, category, query):
 
 
 def render_product(user, product, cookie_header='', review_message=''):
-    product_weight = f'{float(product.get("weightKg", 1.0)):.2f} kg'
+    product_weight = product_weight_label(product)
+    brand = get_brand_for_product(product)
+    gallery_images = product_gallery_images(product)
+    if not gallery_images:
+        gallery_images = ['https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=900&q=80']
+    main_image = gallery_images[0]
+    gallery_thumbs = ''.join(
+        f'<img class="thumb" src="{html.escape(item)}" alt="{html.escape(product_name(product))} thumbnail" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;" onclick="document.getElementById(\'product-main\').src=this.src;" />'
+        for item in gallery_images
+    )
+
+    youtube_embed_block = ''
+    youtube_video_id = parse_youtube_video_id(product.get('youtubeVideoId', ''))
+    if youtube_video_id:
+        youtube_embed_block = (
+            '<section style="margin-top:1.2rem;">'
+            '<h3>Product Video</h3>'
+            '<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;">'
+            f'<iframe src="https://www.youtube.com/embed/{html.escape(youtube_video_id)}" title="YouTube video player" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" loading="lazy" allowfullscreen></iframe>'
+            '</div>'
+            '</section>'
+        )
+
     product_reviews = [item for item in reviews if str(item.get('productId')) == str(product['id'])]
     review_count = len(product_reviews)
     avg_rating = 0
@@ -1094,15 +1588,26 @@ def render_product(user, product, cookie_header='', review_message=''):
 
     return make_template(
         'product.html',
-        title=product['name'],
-        product_name=product['name'],
-        product_description=product['description'],
-        product_price=product['price'],
+        title=product.get('seoPageTitle') or product_name(product),
+        meta_description=product.get('seoMetaDescription') or extract_text_from_html(product_description_html(product))[:160],
+        meta_keywords=product.get('seoMetaKeywords') or product.get('searchKeywords', ''),
+        canonical_url=product.get('canonicalUrl') or product_public_url(product),
+        og_title=product.get('seoPageTitle') or product_name(product),
+        og_description=product.get('seoMetaDescription') or extract_text_from_html(product_description_html(product))[:160],
+        og_image=product_primary_image(product),
+        product_name=html.escape(product_name(product)),
+        product_description=product_description_html(product),
+        product_price=f'{product_price(product):.2f}',
         product_weight=product_weight,
-        product_image=product['image'],
+        product_image=html.escape(main_image),
+        product_gallery_thumbs=gallery_thumbs,
+        youtube_embed_block=youtube_embed_block,
         product_id=product['id'],
         average_rating='--' if not review_count else f'{avg_rating}',
         review_count=review_count,
+        brand_name=html.escape(str(brand.get('brandName', 'Unbranded'))) if brand else 'Unbranded',
+        brand_company_name=html.escape(str(brand.get('companyName', ''))) if brand else '',
+        brand_website_url=html.escape(str(brand.get('websiteUrl', ''))) if brand else '',
         product_review_rows=review_rows,
         review_form_block=review_form_block,
         review_message_block=message_block,
@@ -1128,15 +1633,16 @@ def render_cart(user, cart_items):
             product = next((item for item in products if str(item['id']) == str(product_id)), None)
             if not product:
                 continue
-            weight_kg = float(product.get('weightKg', 1.0))
-            line_total = product['price'] * quantity
+            weight_kg = parse_float_value(product.get('shippingWeightGrams'), 1000) / 1000.0
+            unit_price = product_price(product)
+            line_total = unit_price * quantity
             subtotal += line_total
             total_weight += weight_kg * quantity
             rows.append(
                 f'<div class="cart-item">'
-                f'<img src="{product["image"]}" alt="{product["name"]}" />'
-                f'<div class="item-details"><h3>{product["name"]}</h3><p style="color: var(--muted); font-size: 0.9rem;">Qty {quantity} • ₹{product["price"]}</p></div>'
-                f'<strong>₹{line_total}</strong>'
+                f'<img src="{html.escape(product_primary_image(product))}" alt="{html.escape(product_name(product))}" />'
+                f'<div class="item-details"><h3>{html.escape(product_name(product))}</h3><p style="color: var(--muted); font-size: 0.9rem;">Qty {quantity} • ₹{unit_price:.2f}</p></div>'
+                f'<strong>₹{line_total:.2f}</strong>'
                 f'</div>'
             )
         cart_rows = ''.join(rows)
@@ -1171,10 +1677,10 @@ def render_wishlist(user, wishlist_items):
                 continue
             rows.append(
                 f'<article class="wishlist-item">'
-                f'<img src="{product["image"]}" alt="{product["name"]}" />'
+                f'<img src="{html.escape(product_primary_image(product))}" alt="{html.escape(product_name(product))}" />'
                 f'<div class="wishlist-item-body">'
-                f'<div class="wishlist-item-top"><div><h3>{product["name"]}</h3><p>{product["description"]}</p></div><span class="badge">Best Seller</span></div>'
-                f'<div class="wishlist-item-meta"><span>Organic</span><strong>₹{product["price"]}</strong></div>'
+                f'<div class="wishlist-item-top"><div><h3>{html.escape(product_name(product))}</h3><p>{html.escape(extract_text_from_html(product_description_html(product))[:140])}</p></div><span class="badge">Best Seller</span></div>'
+                f'<div class="wishlist-item-meta"><span>Organic</span><strong>₹{product_price(product):.2f}</strong></div>'
                 f'<div class="wishlist-item-actions"><form method="post" action="/wishlist/move" style="display:inline;"><input type="hidden" name="productId" value="{product_id}" /><button class="btn btn-primary" type="submit">Move to cart</button></form></div>'
                 f'</div></article>'
             )
@@ -1272,6 +1778,8 @@ def render_admin_template(name, **context):
             '<a class="admin-brand" href="/admin/subscribers">Vithi Admin</a>'
             '<nav class="admin-nav">'
             '<a href="/admin/categories">Categories</a>'
+            '<a href="/admin/brands">Brands</a>'
+            '<a href="/admin/products">Products</a>'
             '<a href="/admin/subscribers">Subscribers</a>'
             '<a href="/" target="_blank" rel="noopener noreferrer">Open Storefront</a>'
             '</nav>'
@@ -1434,6 +1942,353 @@ def render_admin_categories(admin_user, query):
     )
 
 
+def render_admin_brands(admin_user, query):
+    status_filter = query.get('status', ['all'])[0].strip().lower() or 'all'
+    sort_by = query.get('sort', ['brand_name'])[0].strip().lower() or 'brand_name'
+    search_term = query.get('q', [''])[0].strip()
+    edit_id = query.get('edit', [''])[0].strip()
+    page_text = query.get('page', ['1'])[0].strip()
+    message = query.get('msg', [''])[0]
+    error = query.get('error', [''])[0]
+
+    try:
+        current_page = int(page_text)
+    except ValueError:
+        current_page = 1
+    current_page = max(1, current_page)
+
+    visible = brands[:]
+    if status_filter in ('online', 'offline'):
+        visible = [item for item in visible if item.get('status', 'online') == status_filter]
+
+    if search_term:
+        token = search_term.lower()
+        visible = [
+            item for item in visible
+            if token in str(item.get('id', '')).lower()
+            or token in item.get('brandName', '').lower()
+            or token in item.get('companyName', '').lower()
+            or token in item.get('gstNumber', '').lower()
+            or token in item.get('contactPersonName', '').lower()
+        ]
+
+    if sort_by == 'company_name':
+        visible.sort(key=lambda item: item.get('companyName', '').lower())
+    elif sort_by == 'created_date':
+        visible.sort(key=lambda item: item.get('createdAt', ''), reverse=True)
+    elif sort_by == 'modified_date':
+        visible.sort(key=lambda item: item.get('modifiedAt', ''), reverse=True)
+    else:
+        sort_by = 'brand_name'
+        visible.sort(key=lambda item: item.get('brandName', '').lower())
+
+    per_page = 10
+    total = len(visible)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    if current_page > total_pages:
+        current_page = total_pages
+    start = (current_page - 1) * per_page
+    page_items = visible[start:start + per_page]
+
+    rows = []
+    for item in page_items:
+        brand_id = str(item.get('id', ''))
+        brand_name = html.escape(str(item.get('brandName', '')))
+        company_name = html.escape(str(item.get('companyName', '')))
+        gst_number = html.escape(str(item.get('gstNumber', '')))
+        contact_person = html.escape(str(item.get('contactPersonName', '')))
+        primary_contact = html.escape(str(item.get('primaryContactNumber', '')))
+        product_count = count_products_for_brand(brand_id)
+        status = item.get('status', 'online')
+        status_label = 'Active' if status == 'online' else 'Inactive'
+        status_class = 'admin-status-online' if status == 'online' else 'admin-status-offline'
+        created_at = html.escape(str(item.get('createdAt', '')))
+        actions_href = f'/admin/brands?edit={brand_id}&status={quote(status_filter)}&sort={quote(sort_by)}&q={quote(search_term)}'
+        rows.append(
+            f'<tr>'
+            f'<td>{brand_id}</td>'
+            f'<td>{brand_name}</td>'
+            f'<td>{company_name}</td>'
+            f'<td>{gst_number}</td>'
+            f'<td>{contact_person}</td>'
+            f'<td>{primary_contact}</td>'
+            f'<td>{product_count}</td>'
+            f'<td><span class="admin-status-chip {status_class}">{status_label}</span></td>'
+            f'<td>{created_at}</td>'
+            f'<td class="admin-actions">'
+            f'<a class="admin-link-btn" href="{actions_href}">View</a>'
+            f'<a class="admin-link-btn" href="{actions_href}">Edit</a>'
+            f'<form method="post" action="/admin/brands/toggle" style="display:inline;">'
+            f'<input type="hidden" name="id" value="{brand_id}" />'
+            f'<input type="hidden" name="status" value="{"offline" if status == "online" else "online"}" />'
+            f'<button type="submit" class="admin-link-btn">{"Deactivate" if status == "online" else "Activate"}</button>'
+            f'</form>'
+            f'<form method="post" action="/admin/brands/delete" style="display:inline;" onsubmit="return confirm(\'Are you sure you want to delete this brand?\')">'
+            f'<input type="hidden" name="id" value="{brand_id}" />'
+            f'<button type="submit" class="admin-link-btn admin-link-danger">Delete</button>'
+            f'</form>'
+            f'</td>'
+            f'</tr>'
+        )
+    brand_rows = ''.join(rows) if rows else '<tr><td colspan="10">No brands found.</td></tr>'
+
+    pagination_links = []
+    for page in range(1, total_pages + 1):
+        href = f'/admin/brands?page={page}&status={quote(status_filter)}&sort={quote(sort_by)}&q={quote(search_term)}'
+        css_class = 'active' if page == current_page else ''
+        pagination_links.append(f'<a class="{css_class}" href="{href}">{page}</a>')
+    pagination_block = ''.join(pagination_links) if pagination_links else '<span class="active">1</span>'
+
+    if edit_id:
+        selected = get_brand_by_id(edit_id)
+        if selected is None:
+            selected = {}
+    else:
+        selected = {}
+
+    form_message = ''
+    if message:
+        form_message = f'<p class="admin-success">{html.escape(message)}</p>'
+    elif error:
+        form_message = f'<p class="admin-error">{html.escape(error)}</p>'
+
+    form_status = selected.get('status', 'online')
+    form_logo = str(selected.get('logoPath', ''))
+    return render_admin_template(
+        'brands.html',
+        title='Brand Management',
+        admin_user=admin_user,
+        brand_count=str(len(brands)),
+        brand_rows=brand_rows,
+        brand_pagination=pagination_block,
+        form_message=form_message,
+        search_query=html.escape(search_term),
+        form_id=str(selected.get('id', 'Auto-generated')),
+        form_brand_name=html.escape(str(selected.get('brandName', ''))),
+        form_company_name=html.escape(str(selected.get('companyName', ''))),
+        form_company_address=html.escape(str(selected.get('companyAddress', ''))),
+        form_gst_number=html.escape(str(selected.get('gstNumber', ''))),
+        form_contact_person_name=html.escape(str(selected.get('contactPersonName', ''))),
+        form_primary_contact_number=html.escape(str(selected.get('primaryContactNumber', ''))),
+        form_secondary_contact_number=html.escape(str(selected.get('secondaryContactNumber', ''))),
+        form_email_address=html.escape(str(selected.get('emailAddress', ''))),
+        form_logo_path=html.escape(form_logo),
+        form_brand_description=html.escape(str(selected.get('brandDescription', ''))),
+        form_website_url=html.escape(str(selected.get('websiteUrl', ''))),
+        form_created_at=html.escape(str(selected.get('createdAt', '-'))),
+        form_modified_at=html.escape(str(selected.get('modifiedAt', '-'))),
+        form_created_by=html.escape(str(selected.get('createdBy', '-'))),
+        form_modified_by=html.escape(str(selected.get('modifiedBy', '-'))),
+        form_product_count=str(count_products_for_brand(selected.get('id', ''))) if selected else '0',
+        status_online_selected='selected' if form_status == 'online' else '',
+        status_offline_selected='selected' if form_status == 'offline' else '',
+        sort_brand_name_selected='selected' if sort_by == 'brand_name' else '',
+        sort_company_name_selected='selected' if sort_by == 'company_name' else '',
+        sort_created_selected='selected' if sort_by == 'created_date' else '',
+        sort_modified_selected='selected' if sort_by == 'modified_date' else '',
+        filter_all_selected='selected' if status_filter == 'all' else '',
+        filter_online_selected='selected' if status_filter == 'online' else '',
+        filter_offline_selected='selected' if status_filter == 'offline' else '',
+        edit_hidden_id=f'<input type="hidden" name="id" value="{selected.get("id", "")}" />' if selected else '',
+        logo_preview_block=f'<img src="{html.escape(form_logo)}" alt="Brand logo preview" class="admin-image-preview" />' if form_logo else '<p class="admin-helper">No logo uploaded yet.</p>'
+    )
+
+
+def render_admin_products(admin_user, query):
+    status_filter = query.get('status', ['all'])[0].strip().lower() or 'all'
+    sort_by = query.get('sort', ['display_order'])[0].strip().lower() or 'display_order'
+    search_term = query.get('q', [''])[0].strip()
+    edit_id = query.get('edit', [''])[0].strip()
+    message = query.get('msg', [''])[0]
+    error = query.get('error', [''])[0]
+
+    visible = products[:]
+    if status_filter in ('online', 'offline'):
+        visible = [item for item in visible if item.get('onlineStatus', 'online') == status_filter]
+
+    if search_term:
+        token = search_term.lower()
+        visible = [
+            item for item in visible
+            if token in str(item.get('id', '')).lower()
+            or token in product_name(item).lower()
+            or token in str(item.get('slug', '')).lower()
+            or token in str(item.get('barcode', '')).lower()
+            or token in str(item.get('searchKeywords', '')).lower()
+            or token in str(item.get('seoMetaKeywords', '')).lower()
+        ]
+
+    if sort_by == 'name':
+        visible.sort(key=lambda item: product_name(item).lower())
+    elif sort_by == 'created_date':
+        visible.sort(key=lambda item: item.get('createdAt', ''), reverse=True)
+    elif sort_by == 'modified_date':
+        visible.sort(key=lambda item: item.get('modifiedAt', ''), reverse=True)
+    else:
+        sort_by = 'display_order'
+        visible.sort(key=lambda item: int(item.get('displayOrder', 999999)))
+
+    rows = []
+    for item in visible:
+        product_id = str(item.get('id', ''))
+        name = html.escape(product_name(item))
+        slug = html.escape(str(item.get('slug', '')))
+        category = get_category_by_id(item.get('categoryId'))
+        brand = get_brand_by_id(item.get('brandId'))
+        category_name = html.escape(str(category.get('name', '-'))) if category else '-'
+        brand_name = html.escape(str(brand.get('brandName', '-'))) if brand else '-'
+        stock = int(parse_float_value(item.get('unitsInStock'), 0))
+        stock_status = 'In Stock' if stock > 0 else 'Out of Stock'
+        online_status = item.get('onlineStatus', 'online')
+        online_label = 'Online' if online_status == 'online' else 'Offline'
+        status_class = 'admin-status-online' if online_status == 'online' else 'admin-status-offline'
+        actions_href = f'/admin/products?edit={product_id}&status={quote(status_filter)}&sort={quote(sort_by)}&q={quote(search_term)}'
+        rows.append(
+            f'<tr>'
+            f'<td>{product_id}</td>'
+            f'<td>{name}</td>'
+            f'<td>{category_name}</td>'
+            f'<td>{brand_name}</td>'
+            f'<td>{html.escape(str(item.get("mrp", 0)))}</td>'
+            f'<td>{html.escape(str(product_price(item)))}</td>'
+            f'<td>{stock} ({stock_status})</td>'
+            f'<td><span class="admin-status-chip {status_class}">{online_label}</span></td>'
+            f'<td>{html.escape(str(item.get("modifiedAt", "")))}</td>'
+            f'<td class="admin-actions">'
+            f'<a class="admin-link-btn" href="{actions_href}">Edit</a>'
+            f'<form method="post" action="/admin/products/toggle" style="display:inline;">'
+            f'<input type="hidden" name="id" value="{product_id}" />'
+            f'<input type="hidden" name="status" value="{"offline" if online_status == "online" else "online"}" />'
+            f'<button type="submit" class="admin-link-btn">{"Set Offline" if online_status == "online" else "Set Online"}</button>'
+            f'</form>'
+            f'<form method="post" action="/admin/products/delete" style="display:inline;" onsubmit="return confirm(\'Are you sure you want to delete this product?\')">'
+            f'<input type="hidden" name="id" value="{product_id}" />'
+            f'<button type="submit" class="admin-link-btn admin-link-danger">Delete</button>'
+            f'</form>'
+            f'</td>'
+            f'</tr>'
+        )
+    product_rows = ''.join(rows) if rows else '<tr><td colspan="10">No products found.</td></tr>'
+
+    if edit_id:
+        selected = get_product_by_id(edit_id)
+        if selected is None:
+            selected = {}
+    else:
+        selected = {}
+
+    form_message = ''
+    if message:
+        form_message = f'<p class="admin-success">{html.escape(message)}</p>'
+    elif error:
+        form_message = f'<p class="admin-error">{html.escape(error)}</p>'
+
+    selected_images = product_gallery_images(selected)
+    selected_images += [''] * (5 - len(selected_images))
+    selected_images = selected_images[:5]
+    selected_primary = int(parse_float_value(selected.get('primaryImageIndex'), 0))
+    selected_primary = max(0, min(selected_primary, 4))
+
+    image_slots = []
+    primary_options = []
+    for idx, image_path in enumerate(selected_images):
+        slot = idx + 1
+        checked = 'checked' if selected_primary == idx else ''
+        preview = (
+            f'<img src="{html.escape(image_path)}" alt="Product image {slot}" class="admin-image-preview" />'
+            if image_path else
+            '<p class="admin-helper">No image uploaded yet.</p>'
+        )
+        image_slots.append(
+            f'<div class="admin-span-2">'
+            f'<label>Image {slot}{" (Primary)" if idx == 0 else ""}</label>'
+            f'<input type="file" name="image{slot}" accept="image/*" />'
+            f'<input type="text" name="imagePath{slot}" value="{html.escape(image_path)}" readonly />'
+            f'<label><input type="checkbox" name="removeImage{slot}" value="1" /> Remove this image</label>'
+            f'<label><input type="radio" name="primaryImagePosition" value="{slot}" {checked} /> Set as primary image</label>'
+            f'<div class="admin-preview">{preview}</div>'
+            f'</div>'
+        )
+        if image_path:
+            primary_options.append(f'Image {slot}')
+
+    category_options = []
+    for category in get_online_categories():
+        selected_flag = 'selected' if str(category.get('id')) == str(selected.get('categoryId', '')) else ''
+        category_options.append(
+            f'<option value="{category.get("id")}" {selected_flag}>{html.escape(str(category.get("name", "")))}</option>'
+        )
+
+    brand_options = []
+    for brand in get_online_brands():
+        selected_flag = 'selected' if str(brand.get('id')) == str(selected.get('brandId', '')) else ''
+        brand_options.append(
+            f'<option value="{brand.get("id")}" {selected_flag}>{html.escape(str(brand.get("brandName", "")))} ({html.escape(str(brand.get("companyName", "")))})</option>'
+        )
+
+    gst_options = []
+    for rate in (0, 5, 12, 18, 28):
+        selected_flag = 'selected' if int(parse_float_value(selected.get('gstPercentage'), 0)) == rate else ''
+        gst_options.append(f'<option value="{rate}" {selected_flag}>{rate}%</option>')
+
+    weight_units = [('g', 'Gram (g)'), ('kg', 'Kilogram (kg)'), ('ml', 'Millilitre (ml)'), ('L', 'Litre (L)'), ('pcs', 'Piece (pcs)')]
+    weight_unit_options = []
+    selected_weight_unit = str(selected.get('weightUnit', 'g'))
+    for unit_value, unit_label in weight_units:
+        selected_flag = 'selected' if selected_weight_unit == unit_value else ''
+        weight_unit_options.append(f'<option value="{unit_value}" {selected_flag}>{unit_label}</option>')
+
+    form_online = str(selected.get('onlineStatus', 'online'))
+
+    return render_admin_template(
+        'products.html',
+        title='Product Management',
+        admin_user=admin_user,
+        product_count=str(len(products)),
+        product_rows=product_rows,
+        form_message=form_message,
+        search_query=html.escape(search_term),
+        form_id=str(selected.get('id', 'Auto-generated')),
+        form_name=html.escape(product_name(selected)),
+        form_slug=html.escape(str(selected.get('slug', ''))),
+        form_category_options=''.join(category_options),
+        form_brand_options=''.join(brand_options),
+        form_description=html.escape(str(selected.get('descriptionHtml', ''))),
+        form_youtube_video=html.escape(str(selected.get('youtubeVideoId', ''))),
+        form_barcode=html.escape(str(selected.get('barcode', ''))),
+        form_mrp=html.escape(str(selected.get('mrp', '0'))),
+        form_selling_price=html.escape(str(selected.get('sellingPrice', '0'))),
+        form_discount_percentage=html.escape(str(selected.get('discountPercentage', '0'))),
+        form_gst_options=''.join(gst_options),
+        form_product_weight_value=html.escape(str(selected.get('productWeightValue', ''))),
+        form_weight_unit_options=''.join(weight_unit_options),
+        form_shipping_weight_grams=html.escape(str(selected.get('shippingWeightGrams', '0'))),
+        form_units_in_stock=html.escape(str(selected.get('unitsInStock', '0'))),
+        form_stock_status='In Stock' if int(parse_float_value(selected.get('unitsInStock'), 0)) > 0 else 'Out of Stock',
+        form_display_order=html.escape(str(selected.get('displayOrder', '1'))),
+        form_online_selected='selected' if form_online == 'online' else '',
+        form_offline_selected='selected' if form_online == 'offline' else '',
+        form_seo_page_title=html.escape(str(selected.get('seoPageTitle', ''))),
+        form_seo_meta_description=html.escape(str(selected.get('seoMetaDescription', ''))),
+        form_seo_meta_keywords=html.escape(str(selected.get('seoMetaKeywords', ''))),
+        form_search_keywords=html.escape(str(selected.get('searchKeywords', ''))),
+        form_canonical_url=html.escape(str(selected.get('canonicalUrl', ''))),
+        form_created_at=html.escape(str(selected.get('createdAt', '-'))),
+        form_modified_at=html.escape(str(selected.get('modifiedAt', '-'))),
+        form_created_by=html.escape(str(selected.get('createdBy', '-'))),
+        form_modified_by=html.escape(str(selected.get('modifiedBy', '-'))),
+        form_image_slots=''.join(image_slots),
+        edit_hidden_id=f'<input type="hidden" name="id" value="{selected.get("id", "")}" />' if selected else '',
+        sort_display_selected='selected' if sort_by == 'display_order' else '',
+        sort_name_selected='selected' if sort_by == 'name' else '',
+        sort_created_selected='selected' if sort_by == 'created_date' else '',
+        sort_modified_selected='selected' if sort_by == 'modified_date' else '',
+        filter_all_selected='selected' if status_filter == 'all' else '',
+        filter_online_selected='selected' if status_filter == 'online' else '',
+        filter_offline_selected='selected' if status_filter == 'offline' else '',
+    )
+
+
 class VithiHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         # Ensure static assets resolve from the project directory regardless of launch cwd.
@@ -1456,11 +2311,27 @@ class VithiHandler(SimpleHTTPRequestHandler):
                 return
             self.respond_html(render_category_page(user, self.headers.get('Cookie'), category, parse_qs(parsed.query)))
             return
+        if path.startswith('/product/'):
+            slug = unquote(path[len('/product/'):]).strip().strip('/')
+            product = get_product_by_slug(slug)
+            if product is None or product.get('onlineStatus', 'online') != 'online':
+                self.send_error(404, 'Product not found')
+                return
+            params = parse_qs(parsed.query)
+            review_message = params.get('review', [''])[0]
+            recently_cookie_value = build_recently_viewed_cookie(self.headers.get('Cookie'), product['id'])
+            cookie = cookies.SimpleCookie()
+            cookie['vithi_recently_viewed'] = recently_cookie_value
+            cookie['vithi_recently_viewed']['path'] = '/'
+            self.respond_html(
+                render_product(user, product, self.headers.get('Cookie'), review_message=review_message),
+                extra_headers=[('Set-Cookie', cookie.output(header=''))]
+            )
+            return
         if path.startswith('/products/'):
             product_id = path.split('/')[-1]
-            try:
-                product = next(item for item in products if str(item['id']) == product_id)
-            except StopIteration:
+            product = get_product_by_id(product_id)
+            if product is None or product.get('onlineStatus', 'online') != 'online':
                 self.send_error(404, 'Product not found')
                 return
             params = parse_qs(parsed.query)
@@ -1522,6 +2393,18 @@ class VithiHandler(SimpleHTTPRequestHandler):
                 self.redirect('/admin/login')
                 return
             self.respond_html(render_admin_categories(admin_user, parse_qs(parsed.query)))
+            return
+        if path == '/admin/brands':
+            if not admin_user:
+                self.redirect('/admin/login')
+                return
+            self.respond_html(render_admin_brands(admin_user, parse_qs(parsed.query)))
+            return
+        if path == '/admin/products':
+            if not admin_user:
+                self.redirect('/admin/login')
+                return
+            self.respond_html(render_admin_products(admin_user, parse_qs(parsed.query)))
             return
         if path == '/cart':
             self.respond_html(render_cart(user, get_cart_items(self.headers.get('Cookie'))))
@@ -1706,6 +2589,357 @@ class VithiHandler(SimpleHTTPRequestHandler):
             self.redirect('/admin/categories?msg=Category+deleted+successfully.')
             return
 
+        if path == '/admin/brands/save':
+            if not admin_user:
+                self.redirect('/admin/login')
+                return
+
+            brand_id = data.get('id', [''])[0].strip()
+            brand_name = data.get('brandName', [''])[0].strip()
+            company_name = data.get('companyName', [''])[0].strip()
+            company_address = data.get('companyAddress', [''])[0].strip()
+            gst_number = data.get('gstNumber', [''])[0].strip().upper()
+            contact_person_name = data.get('contactPersonName', [''])[0].strip()
+            primary_contact_number = data.get('primaryContactNumber', [''])[0].strip()
+            secondary_contact_number = data.get('secondaryContactNumber', [''])[0].strip()
+            email_address = data.get('emailAddress', [''])[0].strip().lower()
+            logo_path = data.get('logoPath', [''])[0].strip()
+            brand_description = data.get('brandDescription', [''])[0].strip()
+            website_url = data.get('websiteUrl', [''])[0].strip()
+            status = data.get('status', ['online'])[0].strip().lower()
+
+            if not brand_name:
+                self.redirect('/admin/brands?error=Brand+Name+is+mandatory.')
+                return
+            if not company_name:
+                self.redirect('/admin/brands?error=Company+Complete+Name+is+mandatory.')
+                return
+            if not primary_contact_number:
+                self.redirect('/admin/brands?error=Primary+Contact+Number+is+mandatory.')
+                return
+            if not is_valid_phone(primary_contact_number, required=True):
+                self.redirect('/admin/brands?error=Primary+Contact+Number+is+invalid.')
+                return
+            if not is_valid_phone(secondary_contact_number):
+                self.redirect('/admin/brands?error=Secondary+Contact+Number+is+invalid.')
+                return
+            if email_address and not is_valid_email(email_address):
+                self.redirect('/admin/brands?error=Email+Address+is+invalid.')
+                return
+            if not is_valid_gstin(gst_number):
+                self.redirect('/admin/brands?error=GST+Number+format+is+invalid.')
+                return
+            if not is_valid_website_url(website_url):
+                self.redirect('/admin/brands?error=Website+URL+is+invalid.')
+                return
+            if status not in ('online', 'offline'):
+                status = 'online'
+
+            for item in brands:
+                if str(item.get('id')) != brand_id and item.get('brandName', '').strip().lower() == brand_name.lower():
+                    self.redirect('/admin/brands?error=Brand+Name+must+be+unique.')
+                    return
+                if gst_number and str(item.get('id')) != brand_id and item.get('gstNumber', '').strip().upper() == gst_number:
+                    self.redirect('/admin/brands?error=GST+Number+must+be+unique.')
+                    return
+
+            uploaded = files.get('logo')
+            if uploaded and uploaded.get('filename'):
+                _, ext = os.path.splitext(uploaded['filename'])
+                safe_name = f'{slugify(brand_name)}-{int(datetime.now().timestamp())}{ext.lower() or ".png"}'
+                target_path = os.path.join(BRAND_LOGO_DIR, safe_name)
+                with open(target_path, 'wb') as out:
+                    out.write(uploaded.get('content', b''))
+                logo_path = f'/assets/brand-logos/{safe_name}'
+
+            now = datetime.now().isoformat(timespec='seconds')
+            actor = admin_user
+
+            if brand_id:
+                brand = get_brand_by_id(brand_id)
+                if not brand:
+                    self.redirect('/admin/brands?error=Brand+not+found.')
+                    return
+                brand.update({
+                    'brandName': brand_name,
+                    'companyName': company_name,
+                    'companyAddress': company_address,
+                    'gstNumber': gst_number,
+                    'contactPersonName': contact_person_name,
+                    'primaryContactNumber': primary_contact_number,
+                    'secondaryContactNumber': secondary_contact_number,
+                    'emailAddress': email_address,
+                    'logoPath': logo_path,
+                    'brandDescription': brand_description,
+                    'websiteUrl': website_url,
+                    'status': status,
+                    'modifiedAt': now,
+                    'modifiedBy': actor,
+                })
+                save_json_file(BRANDS_FILE, brands)
+                self.redirect(f'/admin/brands?edit={brand_id}&msg={quote("Brand updated successfully.")}')
+                return
+
+            new_id = next_brand_id()
+            brands.append({
+                'id': new_id,
+                'brandName': brand_name,
+                'companyName': company_name,
+                'companyAddress': company_address,
+                'gstNumber': gst_number,
+                'contactPersonName': contact_person_name,
+                'primaryContactNumber': primary_contact_number,
+                'secondaryContactNumber': secondary_contact_number,
+                'emailAddress': email_address,
+                'logoPath': logo_path,
+                'brandDescription': brand_description,
+                'websiteUrl': website_url,
+                'status': status,
+                'createdAt': now,
+                'modifiedAt': now,
+                'createdBy': actor,
+                'modifiedBy': actor,
+            })
+            save_json_file(BRANDS_FILE, brands)
+            self.redirect(f'/admin/brands?edit={new_id}&msg={quote("Brand created successfully.")}')
+            return
+
+        if path == '/admin/brands/toggle':
+            if not admin_user:
+                self.redirect('/admin/login')
+                return
+            brand_id = data.get('id', [''])[0].strip()
+            next_status = data.get('status', ['online'])[0].strip().lower()
+            brand = get_brand_by_id(brand_id)
+            if not brand:
+                self.redirect('/admin/brands?error=Brand+not+found.')
+                return
+            brand['status'] = 'online' if next_status == 'online' else 'offline'
+            brand['modifiedAt'] = datetime.now().isoformat(timespec='seconds')
+            brand['modifiedBy'] = admin_user
+            save_json_file(BRANDS_FILE, brands)
+            self.redirect('/admin/brands?msg=Brand+status+updated.')
+            return
+
+        if path == '/admin/brands/delete':
+            if not admin_user:
+                self.redirect('/admin/login')
+                return
+            brand_id = data.get('id', [''])[0].strip()
+            brand = get_brand_by_id(brand_id)
+            if not brand:
+                self.redirect('/admin/brands?error=Brand+not+found.')
+                return
+            if count_products_for_brand(brand_id) > 0:
+                self.redirect('/admin/brands?error=This+brand+cannot+be+deleted+because+one+or+more+products+are+associated+with+it.+Please+reassign+or+remove+the+associated+products+before+deleting+the+brand.')
+                return
+            brands[:] = [item for item in brands if str(item.get('id')) != brand_id]
+            save_json_file(BRANDS_FILE, brands)
+            self.redirect('/admin/brands?msg=Brand+deleted+successfully.')
+            return
+
+        if path == '/admin/products/save':
+            if not admin_user:
+                self.redirect('/admin/login')
+                return
+
+            product_id = data.get('id', [''])[0].strip()
+            product_name_value = data.get('productName', [''])[0].strip()
+            category_id = data.get('categoryId', [''])[0].strip()
+            brand_id = data.get('brandId', [''])[0].strip()
+            description_html = sanitize_rich_text(data.get('descriptionHtml', [''])[0].strip())
+            youtube_video_raw = data.get('youtubeVideoId', [''])[0].strip()
+            barcode = data.get('barcode', [''])[0].strip()
+            slug_input = data.get('slug', [''])[0].strip()
+            mrp = parse_float_value(data.get('mrp', [''])[0], -1)
+            selling_price = parse_float_value(data.get('sellingPrice', [''])[0], -1)
+            gst_percentage = int(parse_float_value(data.get('gstPercentage', [''])[0], -1))
+            product_weight_value = parse_float_value(data.get('productWeightValue', [''])[0], -1)
+            weight_unit = data.get('weightUnit', [''])[0].strip()
+            shipping_weight_grams = parse_float_value(data.get('shippingWeightGrams', [''])[0], -1)
+            units_in_stock = int(parse_float_value(data.get('unitsInStock', [''])[0], -1))
+            online_status = data.get('onlineStatus', ['online'])[0].strip().lower()
+            display_order = int(parse_float_value(data.get('displayOrder', ['1'])[0], 1))
+            seo_page_title = data.get('seoPageTitle', [''])[0].strip()
+            seo_meta_description = data.get('seoMetaDescription', [''])[0].strip()
+            seo_meta_keywords = normalize_comma_list(data.get('seoMetaKeywords', [''])[0])
+            canonical_url = data.get('canonicalUrl', [''])[0].strip()
+            search_keywords = normalize_comma_list(data.get('searchKeywords', [''])[0])
+            primary_position = int(parse_float_value(data.get('primaryImagePosition', ['1'])[0], 1))
+
+            if not product_name_value:
+                self.redirect('/admin/products?error=Product+Name+is+mandatory.')
+                return
+            selected_category = get_category_by_id(category_id)
+            if not selected_category or selected_category.get('status', 'online') != 'online':
+                self.redirect('/admin/products?error=Please+select+an+active+category.')
+                return
+            selected_brand = get_brand_by_id(brand_id)
+            if not selected_brand or selected_brand.get('status', 'online') != 'online':
+                self.redirect('/admin/products?error=Please+select+an+active+brand.')
+                return
+            if mrp < 0:
+                self.redirect('/admin/products?error=MRP+must+be+a+non-negative+number.')
+                return
+            if selling_price < 0:
+                self.redirect('/admin/products?error=Selling+Price+must+be+a+non-negative+number.')
+                return
+            if selling_price > mrp:
+                self.redirect('/admin/products?error=Selling+Price+cannot+exceed+MRP.')
+                return
+            if gst_percentage not in (0, 5, 12, 18, 28):
+                self.redirect('/admin/products?error=GST+Percentage+must+be+one+of+0,5,12,18,28.')
+                return
+            if product_weight_value <= 0:
+                self.redirect('/admin/products?error=Product+Weight+Value+must+be+greater+than+zero.')
+                return
+            if weight_unit not in ('g', 'kg', 'ml', 'L', 'pcs'):
+                self.redirect('/admin/products?error=Please+select+a+valid+weight+unit.')
+                return
+            if shipping_weight_grams < 0:
+                self.redirect('/admin/products?error=Shipping+Weight+must+be+a+non-negative+number.')
+                return
+            if units_in_stock < 0:
+                self.redirect('/admin/products?error=Units+in+Stock+cannot+be+negative.')
+                return
+            if display_order < 1:
+                self.redirect('/admin/products?error=Display+Order+must+be+a+positive+integer.')
+                return
+            if online_status not in ('online', 'offline'):
+                online_status = 'online'
+
+            for item in products:
+                if str(item.get('id')) == str(product_id):
+                    continue
+                if barcode and str(item.get('barcode', '')).strip().lower() == barcode.lower():
+                    self.redirect('/admin/products?error=Barcode+must+be+unique.')
+                    return
+
+            target_product = get_product_by_id(product_id) if product_id else None
+            current_images = product_gallery_images(target_product or {})
+            current_images += [''] * (5 - len(current_images))
+            current_images = current_images[:5]
+
+            image_slots = []
+            for idx in range(1, 6):
+                uploaded, upload_error = save_uploaded_image(files.get(f'image{idx}'), f'{product_name_value}-{idx}')
+                if upload_error:
+                    self.redirect(f'/admin/products?error={quote(upload_error)}')
+                    return
+                form_existing = data.get(f'imagePath{idx}', [''])[0].strip()
+                existing = form_existing or current_images[idx - 1]
+                if uploaded:
+                    existing = uploaded
+                remove_image = data.get(f'removeImage{idx}', [''])[0].strip() == '1'
+                if remove_image:
+                    existing = ''
+                image_slots.append(existing)
+
+            compact_images = [item for item in image_slots if item]
+            if not compact_images:
+                self.redirect('/admin/products?error=At+least+one+Product+Image+is+mandatory.')
+                return
+
+            selected_index = max(1, min(primary_position, 5)) - 1
+            selected_path = image_slots[selected_index] if selected_index < len(image_slots) else ''
+            if selected_path and selected_path in compact_images:
+                primary_index = compact_images.index(selected_path)
+            else:
+                primary_index = 0
+
+            derived_slug = slug_input or product_name_value
+            unique_product_slug = unique_slug(derived_slug, products, key='slug', current_id=product_id)
+            for item in products:
+                if str(item.get('id')) != str(product_id) and str(item.get('slug', '')).strip().lower() == unique_product_slug.lower():
+                    self.redirect('/admin/products?error=Product+Slug+must+be+unique.')
+                    return
+
+            if mrp > 0:
+                discount_percentage = round(max(0, (mrp - selling_price) * 100.0 / mrp), 2)
+            else:
+                discount_percentage = 0
+
+            youtube_video_id = parse_youtube_video_id(youtube_video_raw)
+            now = datetime.now().isoformat(timespec='seconds')
+
+            payload = {
+                'categoryId': int(category_id),
+                'brandId': int(brand_id),
+                'productName': product_name_value,
+                'slug': unique_product_slug,
+                'images': compact_images,
+                'primaryImageIndex': primary_index,
+                'youtubeVideoId': youtube_video_id,
+                'descriptionHtml': description_html,
+                'barcode': barcode,
+                'mrp': round(mrp, 2),
+                'sellingPrice': round(selling_price, 2),
+                'discountPercentage': discount_percentage,
+                'gstPercentage': gst_percentage,
+                'productWeightValue': str(product_weight_value).rstrip('0').rstrip('.') if '.' in str(product_weight_value) else str(product_weight_value),
+                'weightUnit': weight_unit,
+                'shippingWeightGrams': int(round(shipping_weight_grams)),
+                'unitsInStock': units_in_stock,
+                'stockStatus': 'in_stock' if units_in_stock > 0 else 'out_of_stock',
+                'onlineStatus': online_status,
+                'seoPageTitle': seo_page_title or product_name_value,
+                'seoMetaDescription': seo_meta_description or extract_text_from_html(description_html)[:160],
+                'seoMetaKeywords': seo_meta_keywords,
+                'canonicalUrl': canonical_url,
+                'searchKeywords': search_keywords,
+                'displayOrder': display_order,
+                'modifiedAt': now,
+                'modifiedBy': admin_user,
+            }
+
+            if target_product:
+                target_product.update(payload)
+                save_json_file(PRODUCTS_FILE, products)
+                self.redirect(f'/admin/products?edit={target_product.get("id")}&msg={quote("Product updated successfully.")}')
+                return
+
+            new_id = next_product_id()
+            payload.update({
+                'id': new_id,
+                'createdAt': now,
+                'createdBy': admin_user,
+            })
+            products.append(payload)
+            save_json_file(PRODUCTS_FILE, products)
+            self.redirect(f'/admin/products?edit={new_id}&msg={quote("Product created successfully.")}')
+            return
+
+        if path == '/admin/products/toggle':
+            if not admin_user:
+                self.redirect('/admin/login')
+                return
+            product_id = data.get('id', [''])[0].strip()
+            next_status = data.get('status', ['online'])[0].strip().lower()
+            product = get_product_by_id(product_id)
+            if not product:
+                self.redirect('/admin/products?error=Product+not+found.')
+                return
+            product['onlineStatus'] = 'online' if next_status == 'online' else 'offline'
+            product['modifiedAt'] = datetime.now().isoformat(timespec='seconds')
+            product['modifiedBy'] = admin_user
+            save_json_file(PRODUCTS_FILE, products)
+            self.redirect('/admin/products?msg=Product+status+updated.')
+            return
+
+        if path == '/admin/products/delete':
+            if not admin_user:
+                self.redirect('/admin/login')
+                return
+            product_id = data.get('id', [''])[0].strip()
+            product = get_product_by_id(product_id)
+            if not product:
+                self.redirect('/admin/products?error=Product+not+found.')
+                return
+            products[:] = [item for item in products if str(item.get('id')) != product_id]
+            save_json_file(PRODUCTS_FILE, products)
+            self.redirect('/admin/products?msg=Product+deleted+successfully.')
+            return
+
         if path == '/cart/add':
             cookie_header = self.headers.get('Cookie')
             cart_session_id = get_cookie_value(cookie_header, 'vithi_cart_session')
@@ -1887,10 +3121,10 @@ class VithiHandler(SimpleHTTPRequestHandler):
                 rating = 0
 
             if rating < 1 or rating > 5 or not comment:
-                self.redirect(f'/products/{product_id}?review=invalid')
+                self.redirect(f'{product_public_url(product)}?review=invalid')
                 return
             if has_user_reviewed(product_id, user['email']):
-                self.redirect(f'/products/{product_id}?review=exists')
+                self.redirect(f'{product_public_url(product)}?review=exists')
                 return
 
             review_record = {
@@ -1908,7 +3142,7 @@ class VithiHandler(SimpleHTTPRequestHandler):
             else:
                 save_json_file(REVIEWS_FILE, reviews)
 
-            self.redirect(f'/products/{product_id}?review=success')
+            self.redirect(f'{product_public_url(product)}?review=success')
             return
 
         if path == '/subscribe':
@@ -2002,7 +3236,7 @@ class VithiHandler(SimpleHTTPRequestHandler):
             urls.append({'loc': f'{base}{p}', 'lastmod': today, 'priority': '0.8' if p == '' else '0.6'})
         for product in products:
             urls.append({
-                'loc': f"{base}/products/{product['id']}",
+                'loc': f"{base}{product_public_url(product)}",
                 'lastmod': today,
                 'priority': '0.7'
             })

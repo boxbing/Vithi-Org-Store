@@ -3,13 +3,12 @@
     <div class="product-gallery">
       <img id="product-main" src="$product_image" alt="$product_name" style="width:100%;border-radius:12px;" />
       <div style="display:flex;gap:0.6rem;margin-top:0.8rem;">
-        <img class="thumb" src="$product_image" alt="$product_name thumbnail" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;" />
-        <img class="thumb" src="https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=300&q=80" alt="Product alternate view" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;" />
-        <img class="thumb" src="https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=300&q=80" alt="Product lifestyle view" style="width:72px;height:72px;object-fit:cover;border-radius:8px;cursor:pointer;" />
+        $product_gallery_thumbs
       </div>
+      $youtube_embed_block
       <section style="margin-top:1.2rem;">
         <h3>Product Details</h3>
-        <p style="color:var(--muted);max-width:72ch;">$product_description</p>
+        <div style="color:var(--muted);max-width:72ch;">$product_description</div>
       </section>
     </div>
 
@@ -20,6 +19,9 @@
         <strong style="font-size:1.35rem;color:var(--green-900);">₹$product_price</strong>
         <div style="color:var(--gold);">⭐ $average_rating ($review_count)</div>
       </div>
+      <p style="margin:0.45rem 0 0;color:var(--green-700);font-weight:600;">Brand: $brand_name</p>
+      <p style="margin:0.25rem 0 0;color:var(--muted);">$brand_company_name</p>
+      <p style="margin:0.25rem 0 0;color:var(--muted);">$brand_website_url</p>
       <p style="margin:0.5rem 0 0;color:var(--green-700);font-weight:600;">Weight: $product_weight</p>
       <p style="color:var(--muted);margin-top:0.8rem;">Pure, ethically sourced organic essentials crafted for everyday wellness.</p>
 

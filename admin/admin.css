@@ -167,6 +167,7 @@
 }
 
 .admin-filter-row select,
+.admin-filter-row input,
 .admin-form-grid input,
 .admin-form-grid textarea,
 .admin-form-grid select {
@@ -277,6 +278,31 @@
 .admin-link-danger {
   border-color: #ffb8ab;
   color: #ff3e1d;
+}
+
+.admin-pagination {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.admin-pagination a,
+.admin-pagination span {
+  min-width: 2rem;
+  padding: 0.45rem 0.68rem;
+  border-radius: 999px;
+  border: 1px solid #d9dee3;
+  color: #566a7f;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+
+.admin-pagination .active {
+  background: #696cff;
+  border-color: #696cff;
+  color: #fff;
 }
 
 .admin-success {
