@@ -1,4 +1,6 @@
 <main class="section container">
+  <p class="category-breadcrumb" style="margin-bottom:0.9rem;"><a href="/">Home</a> / <a href="$breadcrumb_category_link">$breadcrumb_category</a> / <span>$product_name</span></p>
+
   <div class="product-page" style="display:grid;grid-template-columns:1fr 420px;gap:1.6rem;align-items:start;">
     <div class="product-gallery">
       <img id="product-main" src="$product_image" alt="$product_name" style="width:100%;border-radius:12px;" />
@@ -19,22 +21,40 @@
         <strong style="font-size:1.35rem;color:var(--green-900);">₹$product_price</strong>
         <div style="color:var(--gold);">⭐ $average_rating ($review_count)</div>
       </div>
+      $price_extra_block
       <p style="margin:0.45rem 0 0;color:var(--green-700);font-weight:600;">Brand: $brand_name</p>
       <p style="margin:0.25rem 0 0;color:var(--muted);">$brand_company_name</p>
       <p style="margin:0.25rem 0 0;color:var(--muted);">$brand_website_url</p>
+      <p style="margin:0.25rem 0 0;color:var(--green-700);font-weight:600;">Category: <a class="text-link" href="$category_link">$category_name</a></p>
+      <p style="margin:0.25rem 0 0;font-weight:700;" class="$stock_status_class">Availability: $stock_status_label</p>
       <p style="margin:0.5rem 0 0;color:var(--green-700);font-weight:600;">Weight: $product_weight</p>
       <p style="color:var(--muted);margin-top:0.8rem;">Pure, ethically sourced organic essentials crafted for everyday wellness.</p>
+      <p style="color:var(--muted);font-size:0.92rem;margin-top:0.2rem;">Inclusive of all taxes</p>
+
+      $cart_message_block
+      $wishlist_message_block
 
       <div style="margin-top:1rem;display:flex;gap:0.6rem;">
         <form method="post" action="/cart/add" style="display:inline;">
           <input type="hidden" name="productId" value="$product_id" />
-          <button class="btn btn-primary" type="submit">Add to Cart</button>
+          <input type="hidden" name="redirect" value="$product_url" />
+          <label for="quantity" style="display:block;font-size:0.9rem;color:var(--muted);margin-bottom:0.35rem;">Quantity</label>
+          <input id="quantity" name="quantity" type="number" min="1" max="$quantity_max" value="1" style="width:90px;padding:0.45rem;border:1px solid rgba(32,75,43,0.16);border-radius:8px;margin-right:0.45rem;" />
+          <button class="btn btn-primary" type="submit" $action_disabled>Add to Cart</button>
+        </form>
+        <form method="post" action="/buy-now" style="display:inline;">
+          <input type="hidden" name="productId" value="$product_id" />
+          <input type="hidden" name="quantity" value="1" />
+          <button class="btn btn-secondary" type="submit" $action_disabled>Buy Now</button>
         </form>
         <form method="post" action="/wishlist/add" style="display:inline;">
           <input type="hidden" name="productId" value="$product_id" />
+          <input type="hidden" name="redirect" value="$product_url" />
           <button class="btn product-wishlist-btn wishlist-icon-btn" type="submit" aria-label="Add to wishlist" title="Add to wishlist">&#9829;</button>
         </form>
       </div>
+
+      $action_disabled_block
 
       <div style="margin-top:1rem;color:var(--muted);font-size:0.95rem;">
         <p><strong>Highlights:</strong></p>
@@ -50,6 +70,7 @@
         $review_message_block
         $review_form_block
         <div class="product-review-list">$product_review_rows</div>
+        $review_link_block
       </section>
     </aside>
   </div>
@@ -62,27 +83,19 @@
       </div>
     </div>
     <div class="card-grid product-grid" style="margin-top:1rem;">
-      <article class="card product-card">
-        <img src="https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=900&q=80" alt="Organic Ginger Powder" />
-        <div class="card-body">
-          <h3>Organic Ginger Powder</h3>
-          <div class="price-row"><strong>₹199</strong></div>
-        </div>
-      </article>
-      <article class="card product-card">
-        <img src="https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=900&q=80" alt="Herbal Immunity Mix" />
-        <div class="card-body">
-          <h3>Herbal Immunity Mix</h3>
-          <div class="price-row"><strong>₹349</strong></div>
-        </div>
-      </article>
-      <article class="card product-card">
-        <img src="https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=900&q=80" alt="Wildflower Organic Honey" />
-        <div class="card-body">
-          <h3>Wildflower Organic Honey</h3>
-          <div class="price-row"><strong>₹399</strong></div>
-        </div>
-      </article>
+      $similar_products_cards
+    </div>
+  </section>
+
+  <section style="margin-top:2.2rem;">
+    <div class="section-heading flex-between">
+      <div>
+        <p class="eyebrow">Best Selling</p>
+        <h2>Trending Right Now</h2>
+      </div>
+    </div>
+    <div class="card-grid product-grid" style="margin-top:1rem;">
+      $best_selling_cards
     </div>
   </section>
 

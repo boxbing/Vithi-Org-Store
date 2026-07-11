@@ -612,6 +612,111 @@ def product_stock_status(product):
     return 'in_stock' if units > 0 else 'out_of_stock'
 
 
+def product_mrp(product):
+    return round(parse_float_value(product.get('mrp'), product_price(product)), 2)
+
+
+def product_discount_percentage(product):
+    configured = parse_float_value(product.get('discountPercentage'), -1)
+    if configured >= 0:
+        return round(configured, 2)
+    mrp_value = product_mrp(product)
+    sell_value = product_price(product)
+    if mrp_value <= 0:
+        return 0.0
+    return round(max(0, (mrp_value - sell_value) * 100.0 / mrp_value), 2)
+
+
+def product_savings_amount(product):
+    return round(max(0, product_mrp(product) - product_price(product)), 2)
+
+
+def get_similar_products(current_product, limit=4):
+    # Prioritize same-category items first, then same-brand, then other online products.
+    online = get_online_products()
+    current_id = str(current_product.get('id'))
+    category_id = str(current_product.get('categoryId'))
+    brand_id = str(current_product.get('brandId'))
+
+    same_category = [
+        item for item in online
+        if str(item.get('id')) != current_id and str(item.get('categoryId')) == category_id
+    ]
+    same_brand = [
+        item for item in online
+        if str(item.get('id')) != current_id and str(item.get('categoryId')) != category_id and str(item.get('brandId')) == brand_id
+    ]
+    others = [
+        item for item in online
+        if str(item.get('id')) != current_id and str(item.get('categoryId')) != category_id and str(item.get('brandId')) != brand_id
+    ]
+
+    picks = (same_category + same_brand + others)[:max(0, limit)]
+    return picks
+
+
+def get_best_selling_products(limit=4, exclude_product_id=''):
+    # Approximate "best selling" using order-history product names plus review volume fallback.
+    order_counts = {}
+    for order in orders:
+        key = str(order.get('productName', '')).strip().lower()
+        if not key:
+            continue
+        order_counts[key] = order_counts.get(key, 0) + 1
+
+    review_counts = {}
+    for entry in reviews:
+        pid = str(entry.get('productId', '')).strip()
+        if not pid:
+            continue
+        review_counts[pid] = review_counts.get(pid, 0) + 1
+
+    ranked = []
+    for item in get_online_products():
+        if exclude_product_id and str(item.get('id')) == str(exclude_product_id):
+            continue
+        name_key = product_name(item).lower()
+        popularity = order_counts.get(name_key, 0)
+        social = review_counts.get(str(item.get('id')), 0)
+        display_order = int(item.get('displayOrder', 999999))
+        ranked.append((-(popularity * 100 + social), display_order, item))
+
+    ranked.sort(key=lambda value: (value[0], value[1]))
+    return [item for _, _, item in ranked[:max(0, limit)]]
+
+
+def build_product_schema_json(product, brand, category, avg_rating, review_count):
+    # Emit schema.org Product JSON-LD so crawlers can index pricing and rating semantics.
+    availability = 'https://schema.org/InStock' if product_stock_status(product) == 'in_stock' else 'https://schema.org/OutOfStock'
+    schema = {
+        '@context': 'https://schema.org',
+        '@type': 'Product',
+        'name': product_name(product),
+        'image': [product_primary_image(product)],
+        'description': extract_text_from_html(product_description_html(product)),
+        'sku': str(product.get('barcode') or product.get('id') or ''),
+        'brand': {
+            '@type': 'Brand',
+            'name': str(brand.get('brandName', 'Unbranded')) if brand else 'Unbranded',
+        },
+        'category': str(category.get('name', '')) if category else '',
+        'offers': {
+            '@type': 'Offer',
+            'priceCurrency': 'INR',
+            'price': f'{product_price(product):.2f}',
+            'availability': availability,
+            'url': product_public_url(product),
+        },
+    }
+    if review_count > 0:
+        schema['aggregateRating'] = {
+            '@type': 'AggregateRating',
+            'ratingValue': f'{avg_rating:.1f}',
+            'reviewCount': review_count,
+        }
+    return json.dumps(schema, ensure_ascii=False).replace('</', '<\\/')
+
+
 def normalize_product_record(item):
     normalized = dict(item or {})
     if 'productName' not in normalized:
@@ -1016,6 +1121,7 @@ def make_template(name, **context):
     context.setdefault('og_title', context.get('title', 'Vithi Organics'))
     context.setdefault('og_description', context.get('meta_description', ''))
     context.setdefault('og_image', '')
+    context.setdefault('structured_data_json', '')
     context.setdefault('search_action', '/')
     context.setdefault('search_query', '')
     body = Template(load_template(name)).substitute(**context)
@@ -1030,6 +1136,9 @@ def make_template(name, **context):
         og_title=context.get('og_title', ''),
         og_description=context.get('og_description', ''),
         og_image=context.get('og_image', ''),
+        structured_data_block=(
+            '' if not context.get('structured_data_json') else f'<script type="application/ld+json">{context.get("structured_data_json")}</script>'
+        ),
         header=header,
         content=body,
         footer=footer,
@@ -1507,9 +1616,10 @@ def render_category_page(user, cookie_header, category, query):
     )
 
 
-def render_product(user, product, cookie_header='', review_message=''):
+def render_product(user, product, cookie_header='', review_message='', cart_message='', wishlist_message='', show_all_reviews=False):
     product_weight = product_weight_label(product)
     brand = get_brand_for_product(product)
+    category = get_category_by_id(product.get('categoryId'))
     gallery_images = product_gallery_images(product)
     if not gallery_images:
         gallery_images = ['https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=900&q=80']
@@ -1537,9 +1647,12 @@ def render_product(user, product, cookie_header='', review_message=''):
     if review_count:
         avg_rating = round(sum(int(item.get('rating', 0)) for item in product_reviews) / review_count, 1)
 
-    if product_reviews:
+    # Keep initial page payload small; allow explicit expansion via reviews=all.
+    visible_reviews = product_reviews if show_all_reviews else product_reviews[:5]
+
+    if visible_reviews:
         rows = []
-        for entry in product_reviews:
+        for entry in visible_reviews:
             reviewer = html.escape(str(entry.get('userName', 'Customer')))
             rating = int(entry.get('rating', 0))
             comment = html.escape(str(entry.get('comment', '')))
@@ -1554,6 +1667,10 @@ def render_product(user, product, cookie_header='', review_message=''):
         review_rows = ''.join(rows)
     else:
         review_rows = '<p class="login-copy">No ratings yet. Be the first to review this product.</p>'
+
+    review_link_block = ''
+    if review_count > 5 and not show_all_reviews:
+        review_link_block = f'<p style="margin-top:0.7rem;"><a class="text-link" href="{product_public_url(product)}?reviews=all">View All Reviews</a></p>'
 
     if not user:
         review_form_block = '<p class="login-copy">Please <a class="text-link" href="/login">login</a> to add your rating and comment.</p>'
@@ -1586,6 +1703,41 @@ def render_product(user, product, cookie_header='', review_message=''):
     elif review_message == 'invalid':
         message_block = '<p class="error-message">Please provide a valid rating and comment.</p>'
 
+    cart_message_block = ''
+    if cart_message == 'added':
+        cart_message_block = '<p class="status-message">Product added to cart successfully.</p>'
+    elif cart_message == 'unavailable':
+        cart_message_block = '<p class="error-message">This product is currently out of stock.</p>'
+
+    wishlist_message_block = ''
+    if wishlist_message == 'added':
+        wishlist_message_block = '<p class="status-message">Product saved to wishlist.</p>'
+
+    # Limit selector to a safe storefront max while respecting real stock.
+    stock_units = int(parse_float_value(product.get('unitsInStock'), 0))
+    in_stock = stock_units > 0
+    max_quantity = max(1, min(stock_units, 10)) if in_stock else 1
+
+    price_value = product_price(product)
+    mrp_value = product_mrp(product)
+    discount_value = product_discount_percentage(product)
+    savings_value = product_savings_amount(product)
+    show_discount = mrp_value > price_value and savings_value > 0
+
+    similar_cards = ''.join(build_product_card(item) for item in get_similar_products(product, limit=4))
+    if not similar_cards:
+        similar_cards = '<article class="card category-empty-card"><div class="card-body"><h3>No similar products yet</h3><p>Please check back soon.</p></div></article>'
+
+    best_cards = ''.join(build_product_card(item) for item in get_best_selling_products(limit=4, exclude_product_id=product.get('id')))
+    if not best_cards:
+        best_cards = '<article class="card category-empty-card"><div class="card-body"><h3>No best sellers yet</h3><p>Trending products will appear here.</p></div></article>'
+
+    breadcrumb_category = html.escape(str(category.get('name', 'Products'))) if category else 'Products'
+    breadcrumb_category_link = f'/category/{quote(str(category.get("seoSlug", "")))}' if category and str(category.get('seoSlug', '')).strip() else '/'
+    category_link = breadcrumb_category_link if category else '/'
+
+    schema_json = build_product_schema_json(product, brand, category, avg_rating, review_count)
+
     return make_template(
         'product.html',
         title=product.get('seoPageTitle') or product_name(product),
@@ -1595,9 +1747,29 @@ def render_product(user, product, cookie_header='', review_message=''):
         og_title=product.get('seoPageTitle') or product_name(product),
         og_description=product.get('seoMetaDescription') or extract_text_from_html(product_description_html(product))[:160],
         og_image=product_primary_image(product),
+        structured_data_json=schema_json,
         product_name=html.escape(product_name(product)),
         product_description=product_description_html(product),
-        product_price=f'{product_price(product):.2f}',
+        product_price=f'{price_value:.2f}',
+        product_mrp=f'{mrp_value:.2f}',
+        product_discount=f'{discount_value:.2f}',
+        product_savings=f'{savings_value:.2f}',
+        price_extra_block=(
+            '' if not show_discount else (
+                f'<p class="product-pricing-meta"><span class="product-mrp">MRP: ₹{mrp_value:.2f}</span> '
+                f'<span class="product-offer">{discount_value:.0f}% OFF</span> '
+                f'<span class="product-save">You Save: ₹{savings_value:.2f}</span></p>'
+            )
+        ),
+        stock_status_label='In Stock' if in_stock else 'Out of Stock',
+        stock_status_class='stock-in' if in_stock else 'stock-out',
+        quantity_max=str(max_quantity),
+        action_disabled='disabled' if not in_stock else '',
+        action_disabled_block='' if in_stock else '<p class="error-message" style="margin-top:0.7rem;">Out of Stock: Add to Cart is disabled.</p>',
+        breadcrumb_category=breadcrumb_category,
+        breadcrumb_category_link=breadcrumb_category_link,
+        category_name=breadcrumb_category,
+        category_link=category_link,
         product_weight=product_weight,
         product_image=html.escape(main_image),
         product_gallery_thumbs=gallery_thumbs,
@@ -1609,8 +1781,14 @@ def render_product(user, product, cookie_header='', review_message=''):
         brand_company_name=html.escape(str(brand.get('companyName', ''))) if brand else '',
         brand_website_url=html.escape(str(brand.get('websiteUrl', ''))) if brand else '',
         product_review_rows=review_rows,
+        review_link_block=review_link_block,
         review_form_block=review_form_block,
         review_message_block=message_block,
+        cart_message_block=cart_message_block,
+        wishlist_message_block=wishlist_message_block,
+        similar_products_cards=similar_cards,
+        best_selling_cards=best_cards,
+        product_url=product_public_url(product),
         recently_viewed_block=render_recently_viewed_block(cookie_header),
         **get_template_user_context(user)
     )
@@ -2314,17 +2492,31 @@ class VithiHandler(SimpleHTTPRequestHandler):
         if path.startswith('/product/'):
             slug = unquote(path[len('/product/'):]).strip().strip('/')
             product = get_product_by_slug(slug)
-            if product is None or product.get('onlineStatus', 'online') != 'online':
-                self.send_error(404, 'Product not found')
+            if product is None:
+                self.redirect('/?status=product-not-found')
+                return
+            if product.get('onlineStatus', 'online') != 'online':
+                self.redirect('/?status=product-unavailable')
                 return
             params = parse_qs(parsed.query)
             review_message = params.get('review', [''])[0]
+            cart_message = params.get('cart', [''])[0]
+            wishlist_message = params.get('wishlist', [''])[0]
+            show_all_reviews = params.get('reviews', [''])[0] == 'all'
             recently_cookie_value = build_recently_viewed_cookie(self.headers.get('Cookie'), product['id'])
             cookie = cookies.SimpleCookie()
             cookie['vithi_recently_viewed'] = recently_cookie_value
             cookie['vithi_recently_viewed']['path'] = '/'
             self.respond_html(
-                render_product(user, product, self.headers.get('Cookie'), review_message=review_message),
+                render_product(
+                    user,
+                    product,
+                    self.headers.get('Cookie'),
+                    review_message=review_message,
+                    cart_message=cart_message,
+                    wishlist_message=wishlist_message,
+                    show_all_reviews=show_all_reviews,
+                ),
                 extra_headers=[('Set-Cookie', cookie.output(header=''))]
             )
             return
@@ -2336,12 +2528,23 @@ class VithiHandler(SimpleHTTPRequestHandler):
                 return
             params = parse_qs(parsed.query)
             review_message = params.get('review', [''])[0]
+            cart_message = params.get('cart', [''])[0]
+            wishlist_message = params.get('wishlist', [''])[0]
+            show_all_reviews = params.get('reviews', [''])[0] == 'all'
             recently_cookie_value = build_recently_viewed_cookie(self.headers.get('Cookie'), product['id'])
             cookie = cookies.SimpleCookie()
             cookie['vithi_recently_viewed'] = recently_cookie_value
             cookie['vithi_recently_viewed']['path'] = '/'
             self.respond_html(
-                render_product(user, product, self.headers.get('Cookie'), review_message=review_message),
+                render_product(
+                    user,
+                    product,
+                    self.headers.get('Cookie'),
+                    review_message=review_message,
+                    cart_message=cart_message,
+                    wishlist_message=wishlist_message,
+                    show_all_reviews=show_all_reviews,
+                ),
                 extra_headers=[('Set-Cookie', cookie.output(header=''))]
             )
             return
@@ -2948,8 +3151,67 @@ class VithiHandler(SimpleHTTPRequestHandler):
             if cart_session_id not in carts:
                 carts[cart_session_id] = {}
             product_id = data.get('productId', [''])[0]
-            if product_id:
-                carts[cart_session_id][product_id] = carts[cart_session_id].get(product_id, 0) + 1
+            redirect_target = data.get('redirect', ['/cart'])[0].strip() or '/cart'
+            if not redirect_target.startswith('/'):
+                redirect_target = '/cart'
+            # Quantity is server-validated; client-side controls are convenience only.
+            quantity_text = data.get('quantity', ['1'])[0].strip()
+            try:
+                requested_qty = int(quantity_text)
+            except ValueError:
+                requested_qty = 1
+            requested_qty = max(1, requested_qty)
+
+            product = get_product_by_id(product_id)
+            if product and product.get('onlineStatus', 'online') == 'online':
+                units_available = int(parse_float_value(product.get('unitsInStock'), 0))
+                if units_available <= 0:
+                    self.redirect(f'{product_public_url(product)}?cart=unavailable')
+                    return
+                allowed_qty = min(requested_qty, units_available)
+                current_qty = int(carts[cart_session_id].get(product_id, 0))
+                # Cap final cart quantity to stock to prevent stale over-ordering.
+                carts[cart_session_id][product_id] = min(current_qty + allowed_qty, units_available)
+                if redirect_target.startswith('/product/') or redirect_target.startswith('/products/'):
+                    if '?' in redirect_target:
+                        redirect_target = f'{redirect_target}&cart=added'
+                    else:
+                        redirect_target = f'{redirect_target}?cart=added'
+            self.send_response(302)
+            self.send_header('Location', redirect_target)
+            c = cookies.SimpleCookie()
+            c['vithi_cart_session'] = cart_session_id
+            c['vithi_cart_session']['path'] = '/'
+            self.send_header('Set-Cookie', c.output(header=''))
+            self.end_headers()
+            return
+
+        if path == '/buy-now':
+            cookie_header = self.headers.get('Cookie')
+            cart_session_id = get_cookie_value(cookie_header, 'vithi_cart_session')
+            if not cart_session_id:
+                cart_session_id = generate_session_id()
+            if cart_session_id not in carts:
+                carts[cart_session_id] = {}
+            product_id = data.get('productId', [''])[0]
+            quantity_text = data.get('quantity', ['1'])[0].strip()
+            try:
+                requested_qty = int(quantity_text)
+            except ValueError:
+                requested_qty = 1
+            requested_qty = max(1, requested_qty)
+            product = get_product_by_id(product_id)
+            if not product or product.get('onlineStatus', 'online') != 'online':
+                self.redirect('/?status=product-not-found')
+                return
+            units_available = int(parse_float_value(product.get('unitsInStock'), 0))
+            if units_available <= 0:
+                self.redirect(f'{product_public_url(product)}?cart=unavailable')
+                return
+            allowed_qty = min(requested_qty, units_available)
+            current_qty = int(carts[cart_session_id].get(product_id, 0))
+            carts[cart_session_id][product_id] = min(current_qty + allowed_qty, units_available)
+
             self.send_response(302)
             self.send_header('Location', '/cart')
             c = cookies.SimpleCookie()
@@ -2967,10 +3229,18 @@ class VithiHandler(SimpleHTTPRequestHandler):
             if wishlist_session_id not in wishlist:
                 wishlist[wishlist_session_id] = {}
             product_id = data.get('productId', [''])[0]
+            redirect_target = data.get('redirect', ['/wishlist'])[0].strip() or '/wishlist'
+            if not redirect_target.startswith('/'):
+                redirect_target = '/wishlist'
             if product_id:
                 wishlist[wishlist_session_id][product_id] = wishlist[wishlist_session_id].get(product_id, 0) + 1
+                if redirect_target.startswith('/product/') or redirect_target.startswith('/products/'):
+                    if '?' in redirect_target:
+                        redirect_target = f'{redirect_target}&wishlist=added'
+                    else:
+                        redirect_target = f'{redirect_target}?wishlist=added'
             self.send_response(302)
-            self.send_header('Location', '/wishlist')
+            self.send_header('Location', redirect_target)
             c = cookies.SimpleCookie()
             c['vithi_wishlist_session'] = wishlist_session_id
             c['vithi_wishlist_session']['path'] = '/'

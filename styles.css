@@ -754,6 +754,37 @@ input {
   color: var(--muted);
 }
 
+.product-pricing-meta {
+  margin: 0.35rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.product-mrp {
+  text-decoration: line-through;
+}
+
+.product-offer {
+  color: var(--green-700);
+  font-weight: 700;
+}
+
+.product-save {
+  color: var(--earth);
+  font-weight: 700;
+}
+
+.stock-in {
+  color: var(--green-700);
+}
+
+.stock-out {
+  color: #b3261e;
+}
+
 .actions button {
   border: 0;
   background: var(--green-100);
