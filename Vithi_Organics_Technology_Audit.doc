@@ -1,0 +1,386 @@
+Vithi Organics Project - Technology Audit (Workspace-Based)
+Date: 2026-07-12
+
+This document is based strictly on files present in this workspace.
+
+============================================================
+1) Frontend Technologies
+============================================================
+- HTML (server-rendered templates)
+	Version: N/A
+	Where: templates/, admin/templates/, views/
+	Purpose: Storefront/admin page rendering
+	Status: Actively used
+
+- CSS (custom)
+	Version: N/A
+	Where: styles.css, admin/admin.css
+	Purpose: Styling and responsive layout
+	Status: Actively used
+
+- Vanilla JavaScript
+	Version: N/A
+	Where: script.js
+	Purpose: Menu toggle, mobile search toggle, slider interactions
+	Status: Actively used
+
+- EJS templating (Node secondary runtime)
+	Version: 3.1.10
+	Where: views/, package.json, package-lock.json
+	Purpose: Server-side templating for Node runtime
+	Status: Partially used (secondary runtime)
+
+- Google Fonts
+	Version: N/A
+	Where: templates/base.html, views/layout.ejs, admin/templates/base.html
+	Purpose: Web typography
+	Status: Actively used
+
+============================================================
+2) Backend Technologies
+============================================================
+- Python built-in HTTP server stack (HTTPServer, SimpleHTTPRequestHandler)
+	Version: Needs Verification (Python version not pinned)
+	Where: server.py
+	Purpose: Primary backend runtime and routing
+	Status: Actively used (primary)
+
+- Node.js + Express
+	Version: Declared ^4.19.2, lockfile resolves 4.22.2
+	Where: server.js, package.json, package-lock.json
+	Purpose: Secondary backend runtime
+	Status: Partially used (secondary)
+
+============================================================
+3) Programming Languages
+============================================================
+- Python, JavaScript, HTML, CSS, JSON, Markdown
+	Where: server.py, server.js, templates/, views/, data/, *.md
+	Purpose: App runtime, UI, storage, documentation
+	Status: Actively used
+
+============================================================
+4) Frameworks and Libraries
+============================================================
+- Express (Node web framework)
+- EJS (Node templating)
+- psycopg[binary]==3.3.4 (PostgreSQL driver)
+- Python standard library modules (http.server, urllib.parse, hmac, hashlib, etc.)
+
+Status summary:
+- Express/EJS: Partially used (secondary runtime)
+- psycopg: Actively used when PostgreSQL available
+- Stdlib modules: Actively used
+
+============================================================
+5) Database and Data Storage
+============================================================
+- PostgreSQL (optional primary persistence)
+	Where: server.py, .env.example, README.md
+	Purpose: Users/orders/reviews/subscriptions persistence
+	Status: Actively used when reachable
+
+- JSON file storage fallback
+	Where: data/*.json, admin/data/*.json
+	Purpose: Fallback persistence and catalog/admin data storage
+	Status: Actively used
+
+- In-memory stores
+	Where: server.py (sessions, carts, wishlist, admin_sessions), server.js (sessions map)
+	Purpose: Session/cart/wishlist runtime state
+	Status: Actively used
+
+============================================================
+6) API Architecture and Technologies
+============================================================
+- Server-rendered route architecture with form POST/redirect flows
+	Where: server.py, server.js
+	Status: Actively used
+
+- Sitemap XML endpoint
+	Where: server.py (/sitemap.xml)
+	Status: Actively used
+
+- JSON API layer for mobile/app clients
+	Status: Not implemented (Needs Verification for future plans)
+
+============================================================
+7) Authentication and Authorization
+============================================================
+- Cookie-based user session auth (Python)
+- Cookie-based admin session auth (Python)
+- Simplified cookie/session auth (Node secondary runtime)
+- Password hashing with PBKDF2-SHA256 and hmac.compare_digest
+
+Where: server.py, server.js, admin/data/auth.json, templates/login/register
+Status: Actively used, with legacy data caveat (see Security section)
+
+============================================================
+8) Security Technologies and Practices
+============================================================
+- PBKDF2 password hashing and constant-time comparison
+- Rich-text sanitization (sanitize_rich_text)
+- Admin login CSRF token flow
+- Input validation (email/phone/GST/URL/stock/prices)
+- HttpOnly cookies used in specific flows
+
+Where: server.py, admin/templates/login.html, admin/data/auth.json
+Status: Partially hardened
+
+Security gaps observed:
+- No broad CSRF protection for all state-changing forms
+- No CSP/helmet-like security headers
+- Cookie hardening not uniform (Secure/SameSite not consistently set in Python runtime)
+- Legacy plaintext passwords exist in data/users.json
+
+============================================================
+9) AJAX and Asynchronous Communication
+============================================================
+- No fetch/XMLHttpRequest/AJAX library usage found
+- Client-side async behavior limited to JS timers/event handlers
+	Where: script.js
+	Status: AJAX not implemented
+
+============================================================
+10) Third-Party APIs and Integrations
+============================================================
+- YouTube embeds (conditional iframe rendering)
+	Where: server.py, templates/product.html
+	Status: Actively used when configured
+
+- Google Fonts API
+	Where: template/view/admin base files
+	Status: Actively used
+
+- Unsplash image URLs for seeded/demo visuals
+	Where: server.py defaults, templates/index.html, views/index.ejs, styles.css
+	Status: Actively used
+
+============================================================
+11) Payment Gateway Integration
+============================================================
+- No Stripe/Razorpay/PayPal/Paytm/Cashfree SDK or API integration found
+	Status: Not implemented
+
+============================================================
+12) Email, SMS, WhatsApp, Notifications
+============================================================
+- No provider integrations (SMTP/Twilio/WhatsApp API/Firebase/SendGrid) found
+	Status: Not implemented
+
+- Newsletter capture exists (local/db subscriber save)
+	Where: /subscribe flow in server.py; forms in templates/index.html and templates/partials/footer.html
+	Status: Actively used (capture only)
+
+============================================================
+13) Image Processing and Media Management
+============================================================
+- Custom multipart parser for uploads
+- Product image extension and file-size validation
+- Local filesystem storage for product/category/brand images
+
+Where: server.py, assets/product-images, assets/category-images, assets/brand-logos
+Status: Actively used
+
+============================================================
+14) SEO Technologies and Structured Data
+============================================================
+- Dynamic meta title/description/keywords
+- Canonical URL support
+- Open Graph tags
+- JSON-LD Product schema (schema.org)
+- robots.txt
+- Dynamic sitemap.xml generation
+
+Where: templates/base.html, server.py, robots.txt, admin product/category SEO fields
+Status: Actively used
+
+============================================================
+15) Performance Optimization and Caching
+============================================================
+- Responsive design via CSS media queries
+- Lazy loading on below-fold media in product cards and YouTube iframe
+- Server-side pagination/sort/search in category/admin listings
+
+Where: styles.css, server.py, templates/category.html
+Status: Partially implemented
+
+Not found:
+- Redis/memcached/CDN app-level caching layer
+- Dedicated query cache abstraction
+
+============================================================
+16) Testing Tools and Frameworks
+============================================================
+- Node built-in assert/http based integration test
+	Where: tests/cart.test.js
+	Status: Actively used
+
+- Python automated test suite (pytest/unittest)
+	Status: Not implemented in repository tests folder
+
+============================================================
+17) Development Tools
+============================================================
+- npm scripts for start/dev/test runtime commands
+	Where: package.json
+	Status: Actively used
+
+- Python venv + pip workflow documented
+	Where: README.md
+	Status: Actively used/documented
+
+============================================================
+18) Package Managers and Dependency Management
+============================================================
+- npm + package-lock.json
+- pip + requirements.txt
+
+Status: Actively used
+
+============================================================
+19) Version Control and GitHub Integration
+============================================================
+- Git repository (.git)
+- GitHub project structure and instructions in .github/
+
+Status: Actively used
+
+Note: No GitHub Actions workflow files detected in .github/workflows
+
+============================================================
+20) Deployment, Hosting, and Server Technologies
+============================================================
+- Python primary runtime on configurable port
+- Node secondary runtime on configurable port
+- Environment variable-driven config (PORT, DATABASE_URL, ADMIN creds)
+
+Where: server.py, server.js, .env.example, README.md
+Status: Actively used
+
+Not found:
+- Dockerfile, docker-compose, Kubernetes manifests
+
+============================================================
+21) Mobile App Readiness and API Support
+============================================================
+- SRS explicitly references future mobile app API compatibility
+	Where: productListingDetailFrontSRS.md
+	Status: Planned
+
+- Actual dedicated mobile JSON API layer
+	Status: Not implemented (Needs Verification)
+
+============================================================
+22) Browser Compatibility Technologies
+============================================================
+- Meta viewport in template/view/admin base files
+- Responsive CSS breakpoints (@media)
+- ARIA labels on controls/navigation
+
+Where: templates/base.html, views/layout.ejs, admin/templates/base.html, styles.css, header/footer partials
+Status: Actively used
+
+============================================================
+23) Logging, Monitoring, and Error Handling
+============================================================
+- Console/stdout logging and fallback/error messages
+- Extensive try/except usage in Python runtime
+
+Where: server.py, server.js, tests/cart.test.js
+Status: Basic handling active
+
+Not found:
+- Structured logging framework
+- Monitoring/alerting/APM integrations (Sentry, Datadog, etc.)
+
+============================================================
+24) CI/CD or Automation Tools
+============================================================
+- No CI/CD pipeline configs detected (.github/workflows absent)
+- Local automation present via npm scripts
+
+Status:
+- CI/CD: Not implemented
+- Local scripts: Actively used
+
+============================================================
+25) Other Technologies/Components Found
+============================================================
+- Dynamic XML sitemap generator in Python backend
+- robots.txt allowing crawl with admin/logout restrictions
+- Dual runtime governance (Python primary, Node secondary) explicitly documented
+
+Where: server.py, robots.txt, README.md
+Status: Actively used
+
+
+============================================================
+Technologies Mentioned in Docs But Not Yet Implemented
+============================================================
+1. Full mobile-app-facing API layer (SRS mentions compatibility, code does not expose full JSON API suite).
+2. Real payment gateway integration despite checkout/payment UI text/buttons.
+3. Dedicated Product Not Found / Product Unavailable pages (docs mention pending; current flow often redirects).
+4. Advanced image gallery enhancements (zoom/swipe) noted as pending in verification docs.
+
+============================================================
+Dependencies Installed But Apparently Unused
+============================================================
+- No clearly unused direct dependencies found.
+- Direct dependencies appear used:
+	- express -> server.js
+	- ejs -> views/*.ejs
+	- psycopg -> server.py conditional DB integration
+
+============================================================
+Duplicate or Conflicting Libraries / Architectures
+============================================================
+- Dual stack in same repo:
+	- Python server-rendered runtime (primary)
+	- Node Express + EJS runtime (secondary)
+- Not a direct package conflict, but creates feature drift and maintenance duplication risk.
+
+============================================================
+Outdated or Potentially Insecure Dependencies
+============================================================
+- npm audit --omit=dev --json reports 0 known vulnerabilities at audit time.
+- Express version mismatch between declared range and lockfile resolved version is normal semver behavior, not a conflict.
+- Security concern not dependency-related:
+	- Legacy plaintext user passwords exist in data/users.json and should be migrated to hashed form.
+
+============================================================
+Missing Technologies/Tools to Consider (Based on Requirements)
+============================================================
+1. Dedicated JSON API surface for mobile app and external integrations.
+2. Real payment gateway and webhook handling.
+3. Broader CSRF protection and standardized secure cookie policy.
+4. Security headers (CSP, X-Frame-Options, etc.).
+5. Python-side automated tests for primary runtime.
+6. CI pipeline (test/lint/security checks).
+7. Structured logging and production monitoring.
+8. Optional caching layer for scale/performance.
+
+============================================================
+Documented vs Actual Stack Differences
+============================================================
+- README states Python is primary and Node secondary; code matches this.
+- SRS references checkout/mobile API readiness; actual code has no payment provider and no full JSON API suite.
+- Several SRS verification items are marked partial/pending and are still not fully implemented in runtime code.
+
+============================================================
+Current Technology Stack Summary
+============================================================
+Vithi Organics currently runs as a hybrid eCommerce codebase with a Python primary runtime (server.py + templates) and a Node secondary runtime (server.js + EJS views). Persistence supports PostgreSQL through psycopg with JSON-file fallback, and many storefront/admin flows are fully server-rendered using forms and redirects. SEO capabilities are strong (meta tags, OG, canonical, JSON-LD, robots, sitemap). Security practices are partially implemented (password hashing, sanitization, admin CSRF) but not complete across all forms and cookies. Testing exists mainly for the Node cart flow; CI/CD and production observability tooling are not present in repository code.
+
+============================================================
+Recommended Improvements
+============================================================
+1. Implement dedicated JSON APIs for mobile app readiness and integration use cases.
+2. Integrate a real payment gateway and align checkout flow with actual payment status handling.
+3. Expand CSRF protection and enforce secure cookie settings consistently.
+4. Migrate all legacy plaintext passwords to hashed values.
+5. Add Python runtime test coverage and CI workflows.
+6. Add structured logging/monitoring and deployment automation.
+7. Reduce Python/Node drift by either consolidating runtimes or enforcing parity checks.
+
+End of report.
