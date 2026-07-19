@@ -1,6 +1,6 @@
 ---
 description: "Use when editing code, templates, deployment config, or docs in this repository; preserves the hybrid Python/Node eCommerce stack, JSON/PostgreSQL fallback, and deployment conventions."
-applyTo: ["server.py", "server.js", "requirements.txt", "package.json", "README.md", "styles.css", "script.js", "templates/**", "views/**", "admin/**", "data/**"]
+applyTo: "{server.py,server.js,requirements.txt,package.json,README.md,styles.css,script.js,templates/**,views/**,admin/**,data/**}"
 ---
 # Repository Conventions
 
